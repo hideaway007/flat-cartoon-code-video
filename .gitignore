@@ -1,0 +1,7 @@
+# machine-local settings and notes
+LOCAL.md
+local.json
+# python / os noise
+__pycache__/
+*.pyc
+.DS_Store
