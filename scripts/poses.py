@@ -112,12 +112,17 @@ def pharaoh(**kw):     return P(dict(hL=(150, 80), heldL="crook", rotL=-58, fixL
 def cheer_sword(**kw): return P(dict(hL=(-40, -270), heldL="sword", rotL=90, hR=(60, -250), handR="fist",
                                      eyes="closed", mouth="shout", brows=(12, 14)), kw)
 
+# --- teacher expressions (face only: work on any character; the bust rig uses just these fields)
+def unimpressed(**kw): return P(dict(eyes="half", mouth="flat", brows=(-6, -4), look=(0, 2)), kw)
+def smug(**kw):        return P(dict(eyes="half", mouth="smile", brows=(10, 10), head=-4), kw)
+def outraged(**kw):    return P(dict(eyes="wide", mouth="shout", mopen=1.0, brows=(-20, 4), crack=1.0, head=3), kw)
+
 ALL = [rest, rest_side, back, explain, two, point, spread, wave, think, crossed, shrug, cheer, shock, gulp,
        worried, coil_proud, coil_thrust, tie, tug, look_up_back, shade_eyes_back,
        hold_sword, raise_sword, strike_sword, guard, shield_up, stand_spear, spear_shield, thrust_spear, march,
        march_spear, draw_bow, aim_crossbow, hammer_up, hammer_down, read_scroll, read_book, write_quill, hold_torch,
        torch_up, hold_flag, hold_banner, hold_lantern, use_wrench, hold_staff, bow_greeting, gongshou, salute, kneel,
-       present, pharaoh, cheer_sword]
+       present, pharaoh, cheer_sword, unimpressed, smug, outraged]
 LEGACY = ALL[:21]       # the climbers' poses (before the history set)
 
 # preset name (costumes.PRESETS) -> poses shown on the preset sheet (python costumes.py)

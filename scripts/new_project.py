@@ -19,7 +19,7 @@ for d in ("production/segments", "production/review", "production/stills", "asse
     (P / d).mkdir(parents=True, exist_ok=True)
 
 LIBS = ["engine.py", "toon.py", "scenery.py", "stage.py", "poses.py", "timing.py", "overlays.py", "costumes.py",
-        "crowds.py", "scenery_kits.py"]
+        "crowds.py", "scenery_kits.py", "bust.py"]
 for f in LIBS:
     if not (SKILL / "scripts" / f).exists():
         continue

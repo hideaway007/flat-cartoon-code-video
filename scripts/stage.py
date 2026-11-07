@@ -217,7 +217,9 @@ def draw_toon(frame, L, cam, tn, t, shk):
     sc = math.sqrt(abs(np.linalg.det(A[:, :2])))
     if L.get("shadow", True):
         fl = -1 if L.get("flip") else 1
-        _shadow(frame, [A[:, :2] @ np.array([fl * fx, 0.0]) + A[:, 2] for fx in p["feet"]], 78 * sc, 16 * sc)
+        bust = L["D"].get("rig") == "bust"
+        feet, rx = ((-150.0, 150.0), 130) if bust else (p["feet"], 78)
+        _shadow(frame, [A[:, :2] @ np.array([fl * fx, 0.0]) + A[:, 2] for fx in feet], rx * sc, 16 * sc)
     L["_j"] = T.render_char(frame, L["D"], p, A, flip=L.get("flip", False), idle=idle)
     L["_s"] = sc
 

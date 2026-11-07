@@ -7,7 +7,7 @@ Every helper takes the layer painter `pt` first; `base` = the y where a thing st
 Kits
   interior  room, wall(kind=brick|stone|timber|planks|shoji|palace|plaster), floor(kind=planks|flagstone|tatami|dirt),
             skirting, ceiling_beams, window_gothic, window_lattice, window_round, door, archway, banner, flag,
-            tapestry, scroll, torch, candle, table, bench, shelf, throne, dais, carpet, folding_screen, desk,
+            tapestry, scroll, torch, candle, table, bench, shelf, throne, dais, carpet, folding_screen, chalkboard, desk,
             workbench, tool_rack, gear, barrel, crate
   nature    tree(kind=round|pine|cypress|palm|blossom|bamboo), tree_row, treeline, bush, grass_tufts, rock, water,
             river, field, road, hills, sun, rain_layer
@@ -50,7 +50,7 @@ K = dict(  # BGR
     # architecture
     castle=(170, 178, 184), roof_red=(66, 86, 188), slate=(128, 110, 98), jp_wall=(242, 244, 244),
     jp_roof=(102, 90, 78), torii=(48, 86, 224), cn_roof=(54, 178, 230), wall_tan=(122, 156, 182),
-    marble=(226, 230, 234), sandstone=(132, 192, 228), thatch=(92, 162, 198), factory_brick=(72, 88, 152),
+    marble=(226, 230, 234), board=(74, 92, 52), chalk=(226, 232, 228), sandstone=(132, 192, 228), thatch=(92, 162, 198), factory_brick=(72, 88, 152),
     smoke=(188, 184, 182), cobble=(142, 148, 158), townhouse=(110, 140, 186),
     # maps
     map_paper=(178, 222, 238), map_sea=(200, 208, 172), map_land=(162, 210, 228), burnt=(38, 66, 104),
@@ -868,6 +868,30 @@ def folding_screen(pt, cx, base, w, h, panels=5, frame=K["red_dk"], panel=K["gol
                      tone(panel, 0.86), 0, shade=False)
         pt.shape(scallop(x0 + pw / 2, base - hh * 0.7, pw * 0.22, pw * 0.1, 5, 0.25, 60, i), tone(panel, 1.08), 3,
                  shade=False)
+
+
+def chalkboard(pt, x0, y0, w, h, color=K["board"], frame=K["wood"], tray=True, smudges=True, seed=0):
+    """classroom chalkboard on a wall: wooden frame, dark green board, chalk tray with two sticks and a duster,
+    faint wiped-chalk smudges. Write on it with overlays (title / label / caption_pop, world=True) or a project
+    helper, so the text can change per shot. Returns the board's inner rect (x0, y0, x1, y1)."""
+    fw = max(14, w * 0.022)
+    box(pt, x0 - fw, y0 - fw, x0 + w + fw, y0 + h + fw, frame, OL)
+    box(pt, x0, y0, x0 + w, y0 + h, color, OL2)
+    if smudges:
+        rng = np.random.default_rng(seed)
+        for _ in range(5):
+            cx, cy = x0 + rng.uniform(0.15, 0.85) * w, y0 + rng.uniform(0.2, 0.8) * h
+            rw, rh = rng.uniform(0.08, 0.2) * w, rng.uniform(0.04, 0.09) * h
+            pt.shape(T.ellipse_pts(cx, cy, rw, rh, rng.uniform(-0.3, 0.3), 30), mix(color, K["chalk"], 0.08), 0,
+                     shade=False)
+    if tray:
+        ty = y0 + h + fw
+        box(pt, x0 - fw * 0.5, ty - 4, x0 + w + fw * 0.5, ty + 18, tone(frame, 0.85), OL2)
+        for k, x in enumerate((x0 + w * 0.12, x0 + w * 0.16)):
+            box(pt, x, ty - 14, x + 46 - k * 12, ty - 2, K["chalk"], OL2 * 0.6, shade=False)
+        box(pt, x0 + w * 0.78, ty - 30, x0 + w * 0.86, ty - 2, K["wood_lt"], OL2 * 0.7, shade=False)
+        box(pt, x0 + w * 0.78, ty - 12, x0 + w * 0.86, ty - 2, (110, 110, 110), OL2 * 0.6, shade=False)
+    return x0, y0, x0 + w, y0 + h
 
 
 def desk(pt, cx, base, w, h, color=K["wood"], items=True, seed=0):

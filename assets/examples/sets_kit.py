@@ -493,11 +493,24 @@ def rome():
     return save("rome", pl, 0.72)
 
 
+def classroom():
+    """F in History's classroom: the teacher bust stands left of the board (S.ground_y + ~120 at x ~330)."""
+    pl, wp, fp, gy = room(gy_frac=0.74, wall_kind="plaster", floor_kind="planks", wall_color=(170, 200, 216),
+                          floor_color=(86, 124, 164), seed=11)
+    w = pl.w
+    window_lattice(wp, w - 380, 150, 260, 380, K["wood_dk"], cols=2, rows=3)
+    chalkboard(wp, 560, 120, 900, 500, seed=3)
+    shelf(wp, 80, gy - 40, 300, 360, items="books", shelves=3, seed=4)
+    pr = pl.layer("props", 1.0)
+    desk(pr, w - 420, gy + 150, 440, 170, items=False)
+    return save("classroom", pl, 0.74)
+
+
 SETS = dict(b01=b01, b02=b02, b03=b03, b04=b04, b05=b05, castle_yard=castle_yard, great_hall=great_hall,
             battlefield=battlefield, jp_interior=jp_interior, cn_palace=cn_palace, cn_throne=cn_throne,
             great_wall=great_wall_set, rain_road=rain_road, workshop_in=workshop_in, street_1800s=street_1800s,
             egypt=egypt, map_europe=map_europe, map_eastasia=map_eastasia, village=village, japan_ext=japan_ext,
-            rome=rome)
+            rome=rome, classroom=classroom)
 
 if __name__ == "__main__":
     build(SETS, only=sys.argv[1:])

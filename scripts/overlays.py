@@ -45,7 +45,7 @@ GREEN = (86, 196, 104)
 OL = 4.5                                   # outline width (px) of overlay shapes at 1080p
 
 TYPES = ("circle", "underline", "arrow", "label", "title", "caption_pop", "counter", "bars", "route", "spotlight",
-         "emote", "meter", "stamp")
+         "emote", "meter", "stamp", "report_card")
 EMOTES = ("question", "exclaim", "sweat", "anger", "sparkle", "impact", "speed")
 FILTERS = ("sepia", "night")
 
@@ -1169,6 +1169,165 @@ def stamp_shake(L, t):
     return env * math.sin(v * 61), env * math.cos(v * 53)
 
 
+# ------------------------------------------------------------------------------------------------ 13 report card
+RULE = (232, 206, 170)                     # pale blue ruled lines
+MARGIN = (150, 150, 236)                   # pale red margin line
+
+
+class _Screen:
+    """an overlay context whose points are already screen px (for drawing parts of a rotated/scaled overlay)."""
+
+    def __init__(self, k):
+        self.k = k
+
+    def pt(self, p):
+        return np.asarray(p, np.float64)
+
+
+def _rc_layout(L):
+    size = L.get("size", 44)
+    W_ = L.get("width", 640)
+    pad = size * 0.6
+    y = pad
+    lay = dict(size=size, W=W_, pad=pad)
+    lay["title_y"] = y + size * 0.62
+    y += size * 1.35
+    lines = [s for s in (L.get("name"), L.get("sub")) if s]
+    lay["head_y"] = [y + size * 0.5 + i * size * 0.95 for i in range(len(lines))]
+    y += size * 0.95 * len(lines) + size * 0.25
+    lay["div_y"] = y
+    y += size * 0.2
+    rh = size * 1.3
+    lay["row_y"] = [y + rh * (i + 0.5) for i in range(len(L["rows"]))]
+    y += rh * len(L["rows"])
+    lay["rh"] = rh
+    if L.get("final"):
+        lay["final_y"] = y + size * 1.6
+        y += size * 2.9
+    if L.get("remark"):
+        lay["remark_y"] = y + size * 0.55
+        y += size * 1.2
+    lay["H"] = y + pad * 0.7
+    lay["gx"] = W_ - pad - size * 0.9          # grade column centre
+    lay["mx"] = pad + size * 0.25              # margin line x
+    return lay
+
+
+def _rc_card(L, lay):
+    """the static card (paper, ruling, printed text) as a cached sprite + its anchor (card centre)."""
+    seed = _seed(L)
+    key = ("rcard", L.get("title", "REPORT CARD"), L.get("name"), L.get("sub"), tuple(r[0] for r in L["rows"]),
+           bool(L.get("final")), bool(L.get("remark")), lay["W"], lay["size"], seed, L.get("font", "main"))
+    if key in _spr_cache:
+        return _spr_cache[key]
+    size, W_, H_, pad = lay["size"], lay["W"], lay["H"], lay["pad"]
+    m = 14
+    cv = _sprite_canvas(W_ + 2 * m + 10, H_ + 2 * m + 10)
+    cv.poly(wobbly_rect(m + 10, m + 11, m + W_ + 10, m + H_ + 11, size * 0.3, seed + 1), INK, 0)
+    cv.poly(wobbly_rect(m, m, m + W_, m + H_, size * 0.3, seed), PAPER, OL)
+    fn = L.get("font", "main")
+
+    def put(text, sz, x, y, align="left", col=INK):
+        ts = text_sprite(text, sz, fill=col, ink=col, stroke=0, fname=fn, shadow=False)
+        tw, th = ts.shape[1] / SPR, ts.shape[0] / SPR
+        x0 = x - tw / 2 if align == "center" else (x - tw if align == "right" else x - size * 0.12)
+        cv.paste(ts, SPR, m + x0, m + y - th / 2)
+
+    for y in lay["row_y"]:
+        cv.stroke([(m + pad * 0.5, m + y + lay["rh"] / 2 - 2), (m + W_ - pad * 0.5, m + y + lay["rh"] / 2 - 2)], 2.5,
+                  RULE)
+    cv.stroke([(m + lay["mx"], m + lay["div_y"] + 4), (m + lay["mx"], m + H_ - pad * 0.4)], 3, MARGIN)
+    put(L.get("title", "REPORT CARD"), int(size * 1.1), W_ / 2, lay["title_y"], "center")
+    for text, y in zip([s for s in (L.get("name"), L.get("sub")) if s], lay["head_y"]):
+        put(text, int(size * 0.78), pad, y, col=(90, 84, 86))
+    cv.stroke([(m + pad * 0.5, m + lay["div_y"]), (m + W_ - pad * 0.5, m + lay["div_y"])], 4, INK)
+    for (row, y) in zip(L["rows"], lay["row_y"]):
+        put(row[0], size, lay["mx"] + size * 0.45, y)
+    if L.get("final"):
+        put("FINAL GRADE", int(size * 0.95), lay["mx"] + size * 0.45, lay["final_y"])
+    out = (_to_float(cv), m + W_ / 2, m + H_ / 2)
+    _spr_cache[key] = out
+    return out
+
+
+def _rc_times(L):
+    first, stag = L.get("t", 0.0) + L.get("first", 0.45), L.get("stagger", 0.45)
+    ts = [r[2] if len(r) > 2 else first + i * stag for i, r in enumerate(L["rows"])]
+    tf = L.get("final_t", (max(ts) if ts else first) + stag + 0.15) if L.get("final") else None
+    tr = L.get("remark_t", (tf if tf is not None else max(ts)) + 0.6) if L.get("remark") else None
+    return ts, tf, tr
+
+
+def report_card(frame, c, L, age, outk):
+    """school report card, the channel's grading device: cream card with ruled lines, the student's name and the
+    subjects printed on it; red grades pop in one by one, then a big final grade gets circled and a red remark lands.
+    params: at=(x, y) card centre, rows=[(subject, grade[, t]), ...] (t: shot time the grade appears, e.g.
+    W.rel(st, "word"); default: overlay t + first + i * stagger), name=None ("P. QUINCTILIUS VARUS"), sub=None ("Teutoburg Forest, 9 AD"),
+    title="REPORT CARD", final=None (big grade, e.g. "F"), final_t (default: last grade + stagger + 0.15),
+    remark=None ("See me after class."), remark_t (default final_t + 0.6), width=640, size=44 (printed text px),
+    first=0.45, stagger=0.45, rot=-3 (deg), grade_color=RED, font="main" (printed), hand="comic" (red pen),
+    shake=7 (px screen shake when the final grade lands, 0 = none)"""
+    lay = _rc_layout(L)
+    spr, ax, ay = _rc_card(L, lay)
+    P = c.pt(L["at"])
+    rot = L.get("rot", -3)
+    sc = pop(age / 0.3, 1.6) * c.k * (0.5 + 0.5 * outk)
+    op = L.get("opacity", 1.0) * min(outk * 1.5, 1)
+    if sc <= 0.01:
+        return
+    place_sprite(frame, spr, SPR, (ax, ay), P, sc, rot, op)
+    W_, H_, size = lay["W"], lay["H"], lay["size"]
+
+    def S_(x, y):   # card px (top-left origin) -> screen
+        return P + rot2(np.array([x - W_ / 2, y - H_ / 2]) * sc, rot)
+
+    col = L.get("grade_color", RED)
+    hand = L.get("hand", "comic")
+    ts, tf, tr = _rc_times(L)
+    seed = _seed(L)
+    rng = np.random.default_rng(seed)
+    for (row, y, tg) in zip(L["rows"], lay["row_y"], ts):
+        u = age - (tg - L.get("t", 0.0))
+        if u <= 0:
+            continue
+        g = text_sprite(str(row[1]), int(size * 1.2), fill=col, ink=col, stroke=0, fname=hand, shadow=False)
+        h, w = g.shape[0] / SPR, g.shape[1] / SPR
+        place_sprite(frame, g, SPR, (w / 2, h / 2), S_(lay["gx"], y - size * 0.05), sc * pop(u / 0.22, 2.6),
+                     rot + rng.uniform(-8, 6), op)
+    if tf is not None:
+        u = age - (tf - L.get("t", 0.0))
+        if u > 0:
+            fx, fy = lay["gx"] - size * 0.5, lay["final_y"]
+            g = text_sprite(str(L["final"]), int(size * 2.3), fill=col, ink=col, stroke=0, fname=hand, shadow=False)
+            h, w = g.shape[0] / SPR, g.shape[1] / SPR
+            land = 2.2 - 1.2 * min(u / 0.12, 1) ** 2 if u < 0.12 else 1 - 0.06 * math.exp(-(u - 0.12) / 0.06) * math.cos((u - 0.12) * 40)
+            place_sprite(frame, g, SPR, (w / 2, h / 2), S_(fx, fy), sc * land, rot - 6, op)
+            if u > 0.15:
+                circle(frame, _Screen(sc), dict(at=tuple(S_(fx, fy)), r=(size * 1.35 * sc, size * 1.08 * sc),
+                                                tilt=rot - 8, width=11, color=col, draw=0.35, seed=seed + 5),
+                       u - 0.15, outk)
+    if tr is not None:
+        u = age - (tr - L.get("t", 0.0))
+        if u > 0:
+            g = text_sprite(L["remark"], int(size * 0.95), fill=col, ink=col, stroke=0, fname=hand, shadow=False)
+            h, w = g.shape[0] / SPR, g.shape[1] / SPR
+            place_sprite(frame, g, SPR, (w / 2, h / 2), S_(W_ / 2 + size * 0.3, lay["remark_y"]),
+                         sc * pop(u / 0.25, 2.0), rot - 4, op)
+
+
+def report_card_shake(L, t):
+    """screen shake (dx, dy) when the final grade lands."""
+    amp = L.get("shake", 7)
+    if not amp or not L.get("final"):
+        return 0.0, 0.0
+    _, tf, _ = _rc_times(L)
+    v = t - tf - 0.12
+    if v < 0:
+        return 0.0, 0.0
+    env = amp * math.exp(-v / 0.12)
+    return env * math.sin(v * 61), env * math.cos(v * 53)
+
+
 # ------------------------------------------------------------------------------------------------ filters
 _fcache = {}
 
@@ -1249,14 +1408,16 @@ def render(frame, L, sh, t, tn, shk):
         meter(frame, c, L, age, outk, t)
     elif k == "stamp":
         stamp(frame, c, L, age, outk)
+    elif k == "report_card":
+        report_card(frame, c, L, age, outk)
 
 
 def extra_shake(sh, t):
     """shake added by overlays (stamps landing) at shot time t."""
     dx = dy = 0.0
     for L in sh["layers"]:
-        if L["kind"] == "overlay" and L.get("type") == "stamp":
-            ex, ey = stamp_shake(L, t)
+        if L["kind"] == "overlay" and L.get("type") in ("stamp", "report_card"):
+            ex, ey = (stamp_shake if L["type"] == "stamp" else report_card_shake)(L, t)
             dx += ex
             dy += ey
     return dx, dy
@@ -1264,7 +1425,8 @@ def extra_shake(sh, t):
 
 REQUIRED = dict(circle=[("at", "box")], underline=[("pts", "span")], arrow=["pts"], label=["text", "at"],
                 title=["text"], caption_pop=["text", "at"], counter=["b", "at"], bars=["items", "at"], route=["pts"],
-                spotlight=[("at", "keys")], emote=["symbol", "at"], meter=["at"], stamp=["text", "at"])
+                spotlight=[("at", "keys")], emote=["symbol", "at"], meter=["at"], stamp=["text", "at"],
+                report_card=["rows", "at"])
 
 
 def check(L, dur, sid):
@@ -1293,6 +1455,14 @@ def check(L, dur, sid):
         errs.append(f"{name}: unknown emote symbol {L.get('symbol')!r} (known: {', '.join(EMOTES)})")
     if k == "bars" and "items" in L and not 1 <= len(L["items"]) <= 6:
         errs.append(f"{name}: {len(L['items'])} items (use 2-4)")
+    if k == "report_card" and "rows" in L:
+        if not 1 <= len(L["rows"]) <= 8:
+            errs.append(f"{name}: {len(L['rows'])} rows (use 1-6)")
+        else:
+            ts, tf, tr = _rc_times(L)
+            late = [x for x in ts + [tf, tr] if x is not None and not t0 - 1e-3 <= x < dur]
+            if late:
+                errs.append(f"{name}: grade/remark times {[round(x, 2) for x in late]} outside {t0:.2f}..{dur:.2f}")
     if k in ("route", "arrow") and "pts" in L and len(L["pts"]) < 2:
         errs.append(f"{name}: needs at least 2 points")
     for key in ("keys",):

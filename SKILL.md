@@ -38,6 +38,8 @@ API details (pose fields, layer keys, helpers): [references/api.md](references/a
    beard). Otherwise one design dict per character in `cast.py` (colours, proportions, hair style). New hair/hat/costume
    pieces are code in `toon.py` (`hair()`, `draw_character()`); then `$PY production/poses.py <key>` ->
    `review/poses_<key>.jpg` shows the character in every library pose. Look at that one sheet.
+   F in History's teacher is the talking marble bust (`bust.py`, `B.TEACHER`: a toon layer with `rig="bust"`, no
+   hands); it grades with overlays (`report_card`, `stamp`, `circle`, `counter`). Demo: `assets/examples/seg_teacher.py`.
 4. **Sets**: build from the scenery kit (`scenery_kits.py`: rooms, nature, architecture, real-coastline maps with
    `proj` for `S.lonlat`; copy-ready examples in `assets/examples/sets_kit.py`). Overlays (circles, labels, maps routes,
    counters, stamps...) in `overlays.py`, examples in `assets/examples/seg_overlays.py`; costumes/crowds example in

@@ -16,6 +16,7 @@ ground, y down. Colours BGR.
 | mouth, mopen | smile / grin / open / shout / flat / grit / gulp / talk (talk flaps on `talk` spans) |
 | sweat | 0..1 sweat drop |
 | prop, coil | none / coil_chest / coil_shoulder / pack ; coil_chest (dx, dy, scale) |
+| crack | 0..1 crack across the forehead (bust rig; tweens, so it grows over the key's `dur`) |
 
 Library poses (poses.py): rest, rest_side, back, explain, two, point, spread, wave, think, crossed, shrug, cheer,
 shock, gulp, worried, coil_proud, coil_thrust, tie, tug, look_up_back, shade_eyes_back. Override any field:
@@ -38,9 +39,9 @@ inout/out/linear), `tin` (kind whip with dir +-1 / fade, dur ~0.32-0.4), `shake`
 
 ## Scenery kit (scenery_kits.py; `from scenery_kits import *` in sets.py)
 Every helper takes a layer painter `pt` first; `base` = the y the object stands on; plate px, BGR, palette `K`,
-map colours `REGION_COLORS`. Examples of all helpers: 16 sets (castle_yard, great_hall, battlefield, jp_interior,
+map colours `REGION_COLORS`. Examples of all helpers: 17 sets (castle_yard, great_hall, battlefield, jp_interior,
 cn_palace, cn_throne, great_wall_set, rain_road, workshop_in, street_1800s, egypt, map_europe, map_eastasia,
-village, japan_ext, rome) in the skill's `assets/examples/sets_kit.py`.
+village, japan_ext, rome, classroom) in the skill's `assets/examples/sets_kit.py`.
 - Interiors: `room(gy_frac=0.68, wall_kind, floor_kind, wall_color, floor_color, wall_kw, floor_kw, ...)` ->
   `(plate, wall_pt, floor_pt, gy)`; `wall(pt, x0, y0, x1, y1, kind=brick|stone|timber|planks|shoji|palace|plaster)`,
   `floor(pt, x0, x1, gy, y1, kind=planks|flagstone|tatami|tiles|dirt)`, `ceiling_beams`, `carpet`, `skirting`;
@@ -48,7 +49,8 @@ village, japan_ext, rome) in the skill's `assets/examples/sets_kit.py`.
   `device(kind=cross|saltire|chevron|bend|sun|star|tower|crescent|circle|fleur|lion)`, `banner`, `flag`, `tapestry`,
   `scroll(kind=mountains|bamboo|calligraphy|blank)`; `torch`, `candle`, `glow`; `table` (returns top y), `bench`,
   `shelf(items=mixed|books|jars|scrolls)`, `dais` (returns top y), `throne(style=euro|china)`, `folding_screen`, `desk`,
-  `workbench`, `tool_rack`, small props `gear hammer saw wrench barrel crate`.
+  `workbench`, `tool_rack`, small props `gear hammer saw wrench barrel crate`; `chalkboard(pt, x0, y0, w, h)` (returns
+  the board rect; write on it with world overlays). Example `classroom` set (teacher's room) in sets_kit.py.
 - Nature: `tree(kind=round|pine|cypress|palm|blossom|bamboo)`, `tree_row`, `treeline`, `bush`, `grass_tufts`, `rock`,
   `water`, `river(path, w_far, w_near)`, `field(crop=None|wheat|rice)`, `road(x_far, y_far, w_far, x_near, y_near,
   w_near, ruts, puddles)`, `hills(shape=round|dune)` (returns ridge points), `sun`, `rain_layer(plate, ...)`
@@ -89,6 +91,18 @@ spear_shield thrust_spear march march_spear draw_bow aim_crossbow hammer_up hamm
 write_quill hold_torch torch_up hold_flag hold_banner hold_lantern use_wrench hold_staff bow_greeting gongshou salute
 kneel present pharaoh cheer_sword.
 
+## Teacher bust (bust.py as `B`; F in History's narrator)
+A design with `rig="bust"` is drawn by bust.py instead of the body rig, so it is a normal `S.toon` layer (keys,
+`talk`, motions, idle sway, `flip`, `--check`). `B.TEACHER` is the channel's teacher; `B.design(plinth=False, ...)` for
+the bust alone on a shelf/desk (origin = bottom of the chest cut, use `shadow=False`). Keys: marble, marble_dk,
+plinth, plaque (colour or None), wreath laurel/none, wreath_col, curls, head_rx/ry. Pose fields used: facing
+(f/r/b), head, head_dy, lean (rocks on the plinth), eyes, look, brows, mouth, mopen, sweat, crack; arms/feet/props
+are ignored (no hands: grading is done with overlays). ~1240 units tall with the plinth: scale 0.5-0.6 stands it
+on the ground line beside full-body characters. Joints: head, plaque (centre, for a label), top, base.
+Expressions in poses.py (face fields only, work on any character): `unimpressed`, `smug`, `outraged` (crack=1).
+`python production/bust.py` -> `review/bust.jpg` (every expression, facings, no-plinth). Demo segment with the
+classroom set and the report card: `assets/examples/seg_teacher.py`.
+
 ## Crowds (crowds.py as `CR`)
 ```python
 layers += CR.crowd(CO.LEGIONARY, PO.spear_shield(), n=9, rows=3, x=(150, 1770), y=gy + 120, scale=0.27,
@@ -121,6 +135,7 @@ Layers after the characters; `t` = start inside the shot, optional `dur`/`out` (
 | emote | symbol, at | question/exclaim/sweat/anger/sparkle/impact/speed; size 1.0, rot, flip, dir (speed) |
 | meter | at (top-left) | label "POWER", keys=[(t, 0..1)] or value, size (440,46), low 0.25, segments 10 |
 | stamp | text, at | size 120, rot -12, color RED, shake 9 |
+| report_card | rows=[(subject, grade[, shot t])], at | name, sub, title "REPORT CARD", final (circled big grade), final_t, remark ("See me after class."), remark_t, width 640, size 44, first 0.45, stagger 0.45, rot -3, grade_color RED, hand "comic", shake 7 |
 Shot filters: `filter="sepia"` (flashback) / `"night"` or `dict(kind=..., amount=)`; applied to layers before the first
 overlay, so graphics keep their colours. `--check` validates types, required params, times.
 

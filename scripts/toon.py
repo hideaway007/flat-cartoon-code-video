@@ -219,6 +219,7 @@ DEFAULT_POSE = dict(
     rotR=0.0,              #   forearm hangs down, -90 = up; the prop turns with the forearm (shields stay upright)
     fixL=0.0,              # 0..1: 1 = the left prop keeps the angle rotL in the torso frame (0 forward, -90 up,
     fixR=0.0,              #   90 down) whatever the forearm does; tweens smoothly between the two modes
+    crack=0.0,             # 0..1 crack across the forehead (bust rig: the teacher losing patience)
 )
 
 NUMERIC = [k for k, v in DEFAULT_POSE.items() if isinstance(v, (int, float, tuple))]
@@ -246,7 +247,11 @@ def pose(**kw):
 
 def draw_character(pt: Painter, D, p, idle=(0.0, 0.0)):
     """Draw design D in pose p. idle = (breathe 0..1 scale, head sway deg). Returns dict of joint positions
-    (char space) e.g. 'handL', 'handR' for ropes (+ 'gripL'/'tipL' etc. for held props)."""
+    (char space) e.g. 'handL', 'handR' for ropes (+ 'gripL'/'tipL' etc. for held props).
+    A design with rig="bust" is drawn by bust.py (talking marble bust on a plinth)."""
+    if D.get("rig") == "bust":
+        import bust
+        return bust.draw(pt, D, p, idle)
     fac = p["facing"]
     k = 1 if fac == "r" else 0                      # three-quarter amount
     back = fac == "b"
@@ -586,7 +591,12 @@ BOX_COSTUME = (-720, -1640, 720, 140)       # hats, capes, wide sleeves
 BOX_PROPS = (-1320, -2150, 1320, 170)       # long props (spears, banners, longbows) may reach far
 
 
+BOX_BUST = (-430, -1330, 430, 40)          # bust.py rig with its plinth
+
+
 def char_box(D, p):
+    if D.get("rig") == "bust":
+        return BOX_BUST
     if not uses_costumes(D, p):
         return BOX
     return BOX_PROPS if (p.get("heldL", "none") != "none" or p.get("heldR", "none") != "none") else BOX_COSTUME
