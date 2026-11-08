@@ -23,7 +23,7 @@ Google Cloud project, first found wins: --gcp-project, env GEMINI_TTS_PROJECT, "
 (machine-local, git-ignored), then `gcloud config get-value project`.
 """
 import argparse, base64, concurrent.futures as cf, json, os, pathlib, re, shutil, subprocess, sys, time, urllib.error
-import urllib.request, wave
+import threading, urllib.request, wave
 
 MODEL = "gemini-3.8-flash-tts"
 VOICE = "Fenrir"
@@ -83,10 +83,15 @@ def count_words(text):
     return len(text.split())
 
 
+_SAVE_LOCK = threading.Lock()
+
+
 def save(m):
-    tmp = MAN.with_suffix(".tmp")
-    tmp.write_text(json.dumps(m, ensure_ascii=False, indent=2) + "\n")
-    tmp.replace(MAN)
+    # worker threads save the shared manifest concurrently: serialise, and give each write its own temp file
+    with _SAVE_LOCK:
+        tmp = MAN.with_name(f"manifest.{threading.get_ident()}.tmp")
+        tmp.write_text(json.dumps(m, ensure_ascii=False, indent=2) + "\n")
+        tmp.replace(MAN)
 
 
 def seconds(path):

@@ -10,7 +10,8 @@ Kits
             tapestry, scroll, torch, candle, table, bench, shelf, throne, dais, carpet, folding_screen, chalkboard, desk,
             workbench, tool_rack, gear, barrel, crate
   nature    tree(kind=round|pine|cypress|palm|blossom|bamboo), tree_row, treeline, bush, grass_tufts, rock, water,
-            river, field, road, hills, sun, rain_layer
+            river, field, road, hills, sun, rain_layer, tipi
+  depth     furrows (perspective lines to a vanishing point), fog (haze band layer); text: ptext, font_path
   architecture  merlons, stone_wall, tower, castle, city_wall, eave_roof, jp_castle, pagoda, torii, cn_hall,
             great_wall, temple, colonnade, pyramid, house, windmill, factory, townhouse, lamp_post, workshop, cobbles
   maps      map_plate(name, lon0, lat0, lon1, lat1, highlight={"FRA": color}, regions=[(lonlat_poly, color)]) ->
@@ -2122,3 +2123,98 @@ def map_plate(name, lon0, lat0, lon1, lat1, highlight=None, regions=None, w=None
         f = f * (1 - 0.75 * t[..., None]) + np.array(K["burnt"], np.float32) * 0.75 * t[..., None]
     img[..., :3] = np.clip(f, 0, 255).astype(np.uint8)
     return save(name, pl, ground, proj=dict(lon0=lon0, lat0=lat0, lon1=lon1, lat1=lat1))
+
+
+
+# ================================================================================================ depth + text kit
+# (added 2026-11-09 after comparing with Squire Explains: perspective ground, haze bands, text painted on a set)
+_FONT_DIRS = [pathlib.Path(__file__).resolve().parent.parent / "assets" / "fonts",
+              pathlib.Path(__file__).resolve().parent.parent.parent / "assets" / "fonts"]
+
+
+def font_path(name="LilitaOne-Regular.ttf"):
+    """a font from the project's / skill's assets/fonts (or an absolute path)."""
+    if pathlib.Path(name).is_absolute():
+        return name
+    for d in _FONT_DIRS:
+        if (d / name).exists():
+            return str(d / name)
+    raise FileNotFoundError(name)
+
+
+def ptext(pt, text, x, y, size, color=(30, 26, 24), font="LilitaOne-Regular.ttf", rot=0.0, anchor="lm", alpha=1.0,
+          spacing=1.0):
+    """text painted on a plate layer (signs, labels on a map, handwriting on a note). anchor: PIL-style 2 letters
+    (l/m/r + t/m/b) for (x, y); rot = degrees counter-clockwise; font = file in assets/fonts or an absolute path."""
+    from PIL import Image, ImageDraw, ImageFont
+    s = SS
+    f = ImageFont.truetype(font_path(font), int(size * s))
+    lines = text.split("\n")
+    lh = int(size * s * 1.18 * spacing)
+    wmax = max(int(f.getlength(l)) for l in lines) + 8 * s
+    im = Image.new("RGBA", (wmax, lh * len(lines) + 8 * s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for i, l in enumerate(lines):
+        d.text((4 * s, 4 * s + i * lh), l, font=f, fill=(color[2], color[1], color[0], int(255 * alpha)))
+    if rot:
+        im = im.rotate(rot, resample=Image.BICUBIC, expand=True)
+    a = np.asarray(im).astype(np.float32) / 255
+    x0 = int(x * s - {"l": 0, "m": 0.5, "r": 1}[anchor[0]] * a.shape[1])
+    y0 = int(y * s - {"t": 0, "m": 0.5, "b": 1}[anchor[1]] * a.shape[0])
+    H, W = pt.img.shape[:2]
+    xa, ya, xb, yb = max(x0, 0), max(y0, 0), min(x0 + a.shape[1], W), min(y0 + a.shape[0], H)
+    if xa >= xb or ya >= yb:
+        return
+    src = a[ya - y0:yb - y0, xa - x0:xb - x0]
+    al = src[..., 3:4]
+    dst = pt.img[ya:yb, xa:xb].astype(np.float32)
+    dst[..., :3] = dst[..., :3] * (1 - al) + src[..., [2, 1, 0]] * 255 * al
+    dst[..., 3:4] = np.maximum(dst[..., 3:4], al * 255)
+    pt.img[ya:yb, xa:xb] = dst.astype(np.uint8)
+
+
+def furrows(pt, vp, gy, h, n=22, color=(0, 0, 0), width=4.0, spread=2.6, x_rows=0, seed=0):
+    """DEPTH: lines on the ground converging to a vanishing point vp=(x, y) on the horizon: ploughed furrows, wheel
+    ruts, a survey grid. spread = width of the fan at the bottom edge (x plate widths); x_rows adds cross lines spaced
+    by perspective (denser toward the horizon) for a grid / field edges. h = plate height (lines start below it)."""
+    vx, vy = vp
+    w = pt.img.shape[1] / SS
+    rng = np.random.default_rng(seed)
+    for k in range(n):
+        u = k / max(n - 1, 1)
+        xb = vx + (u - 0.5) * w * spread + rng.uniform(-8, 8)
+        a, b = (xb, h + 20), (vx + (xb - vx) * 0.04, vy + 4)
+        pt.line([a, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), b], width, color)
+    for j in range(1, x_rows + 1):
+        f = (j / (x_rows + 1)) ** 2.2
+        y = vy + (h + 20 - vy) * f
+        half = (w * spread / 2) * f + 40
+        pt.line([(vx - half, y), (vx + half, y)], max(1.5, width * (0.4 + f)), color)
+
+
+def fog(pl, name, depth, y0, y1, color=(236, 240, 242), peak=0.75, seed=0):
+    """DEPTH: a semi-transparent haze band as its own plate layer (alpha 0 at y0 / y1, `peak` in the middle, lightly
+    lumpy) - put it between far and near layers so distant things fade."""
+    L = pl.layer(name, depth)
+    H, W = L.img.shape[:2]
+    s = H / pl.h
+    ys = np.arange(H)[:, None] / s
+    u = np.clip((ys - y0) / max(y1 - y0, 1), 0, 1)
+    a = np.sin(u * math.pi) ** 0.8 * peak
+    rng = np.random.default_rng(seed)
+    noise = cv2.GaussianBlur(rng.uniform(0.75, 1.0, (H // 40 + 1, W // 40 + 1)).astype(np.float32), (0, 0), 1.2)
+    noise = cv2.resize(noise, (W, H), interpolation=cv2.INTER_CUBIC)
+    L.img[..., :3] = color
+    L.img[..., 3] = np.clip(a * noise * 255, 0, 255).astype(np.uint8)
+    return L
+
+
+def tipi(pt, x, base, s, col=(196, 222, 232), seed=0):
+    """a plain Plains conical lodge with its poles crossing above the top and a door flap (drawn simply)."""
+    top = base - s * 1.15
+    for dx in (-0.16, -0.05, 0.07, 0.17):
+        pt.line([(x + dx * s * 0.3, top + s * 0.08), (x + dx * s, top - s * 0.22)], max(2.0, s * 0.045), (60, 80, 110))
+    pt.shape(dense([(x - s * 0.52, base), (x - s * 0.06, top), (x + s * 0.06, top), (x + s * 0.52, base)], 14),
+             col, max(2.5, s * 0.06))
+    pt.shape(T.ellipse_pts(x, base - s * 0.14, s * 0.11, s * 0.16, 0, 20, math.pi, 2 * math.pi), tone(col, 0.55),
+             max(2.0, s * 0.045), shade=False)

@@ -159,9 +159,11 @@ def draw(pt, D, p, idle=(0.0, 0.0)):
             if len(b) > 1:
                 pt.line(H(b), LINE * 0.6)
     if p["sweat"] > 0.05 and not back:
-        s = p["sweat"]
+        s = min(p["sweat"], 1.0)
         pt.blob(H([(rx * 0.95, -ry * 0.45), (rx * 0.95 + 22 * s, -ry * 0.1), (rx * 0.95, -ry * 0.0 + 10 * s),
                    (rx * 0.95 - 22 * s, -ry * 0.1)]), (235, 190, 120), LINE * 0.7, n=6)
+    if not back:
+        TN.head_marks(pt, H, p, rx, ry, 34 * k, None)   # extra sweat drops (sweat > 1), anger vein
     joints["head"] = hc
     # stand-ins so generic code that asks for hands/feet still gets a point
     for key in ("handL", "handR", "footL", "footR", "hip"):

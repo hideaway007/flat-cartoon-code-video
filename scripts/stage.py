@@ -177,7 +177,12 @@ def pose_at(L, t):
         on = [(a, b) for a, b in L["talk"] if a <= t < b]
         cur["mopen"] = (0.15 + 0.85 * abs(math.sin(math.pi * (t - on[0][0]) / max(on[0][1] - on[0][0], 0.08)))
                         if on else 0.1)
-    if L.get("walk"):
+    if L.get("walk") and L["D"].get("rig") == "horse":   # horse.py: walk= drives the gait cycle, rider keeps the pose
+        w = L["walk"]
+        cur["stride"] = (t / w.get("period", 1.0) + w.get("ph", 0) / (2 * math.pi)) % 1.0
+        if cur.get("gait", "stand") == "stand":
+            cur["gait"] = "walk"
+    elif L.get("walk"):
         w = L["walk"]
         s = math.sin(2 * math.pi * t / w.get("period", 0.56) + w.get("ph", 0))
         cur["lift"] = (max(0, s) * 46, max(0, -s) * 46)
@@ -217,10 +222,27 @@ def draw_toon(frame, L, cam, tn, t, shk):
     sc = math.sqrt(abs(np.linalg.det(A[:, :2])))
     if L.get("shadow", True):
         fl = -1 if L.get("flip") else 1
-        bust = L["D"].get("rig") == "bust"
-        feet, rx = ((-150.0, 150.0), 130) if bust else (p["feet"], 78)
+        rig = L["D"].get("rig")
+        feet, rx = {"bust": ((-150.0, 150.0), 130), "horse": ((-200.0, 0.0, 200.0), 170)}.get(rig, (p["feet"], 78))
         _shadow(frame, [A[:, :2] @ np.array([fl * fx, 0.0]) + A[:, 2] for fx in feet], rx * sc, 16 * sc)
-    L["_j"] = T.render_char(frame, L["D"], p, A, flip=L.get("flip", False), idle=idle)
+    blur, haze = float(L.get("blur", 0) or 0), float(L.get("haze", 0) or 0)
+    if blur > 0.3 or haze > 0.01 or L.get("tint"):
+        # depth of field / atmosphere: draw the character on its own premultiplied layer, soften it, then composite
+        lay = np.zeros((E.H, E.W, 4), np.float32)
+        L["_j"] = T.render_char(lay, L["D"], p, A, flip=L.get("flip", False), idle=idle)
+        rgb, alpha = lay[..., :3], lay[..., 3]
+        if L.get("tint"):
+            rgb *= np.array(L["tint"], np.float32)
+        if haze > 0.01:
+            hc = np.array(L.get("haze_col", (0.86, 0.86, 0.88)), np.float32)
+            rgb[:] = rgb * (1 - haze) + hc * alpha[..., None] * haze
+        if blur > 0.3:
+            k = int(blur * 3) * 2 + 1
+            rgb[:] = cv2.GaussianBlur(rgb, (k, k), blur)
+            alpha = cv2.GaussianBlur(alpha, (k, k), blur)
+        frame *= (1 - np.clip(alpha, 0, 1)[..., None]); frame += rgb
+    else:
+        L["_j"] = T.render_char(frame, L["D"], p, A, flip=L.get("flip", False), idle=idle)
     L["_s"] = sc
 
 
@@ -323,6 +345,59 @@ def contact_sheet(paths, out, w=530, cols=3):
     cv2.imwrite(str(out), np.vstack([np.hstack(ims[i:i + cols]) for i in range(0, len(ims), cols)]),
                 [cv2.IMWRITE_JPEG_QUALITY, 82])
     return out
+
+
+
+# ------------------------------------------------------------------------------------------------ depth + mood helpers
+# (ep02, added after comparing with Squire Explains: foreground occluders, depth of field, shot sizes, mood light)
+SHOT_SIZES = dict(   # camera zoom around a subject point: extreme close-up ... extreme wide
+    ECU=3.2, CU=2.3, MCU=1.75, MS=1.3, MWS=1.1, WS=1.0, EWS=0.92)
+
+
+def cam_on(subject, size="MS", push=0.05, dx=0.0, dy=0.0, ease="out", head=0.0):
+    """camera dict framing `subject` (screen px of the point to frame, e.g. a face) at a shot size from SHOT_SIZES;
+    push = extra zoom over the shot (+ in, - out), dx/dy = pan over the shot (px), head = lift the focus by px
+    (keeps faces in the upper third in close-ups)."""
+    z = SHOT_SIZES[size] if isinstance(size, str) else float(size)
+    fx, fy = subject[0], subject[1] - head
+    return dict(z0=z, z1=z * (1 + push), focus=(fx, fy), x0=-dx / 2, x1=dx / 2, y0=-dy / 2, y1=dy / 2, ease=ease)
+
+
+def fg(D, pos, scale, keys=None, blur=7.0, depth=1.5, haze=0.0, tint=None, flip=False, **kw):
+    """a FOREGROUND occluder: a big, blurred character close to the lens (edge of frame) that moves faster than the
+    scene (depth > 1 = more parallax). Put it AFTER the main characters in the layer list."""
+    from poses import rest_side
+    return toon(D, pos, scale, keys or [(0, rest_side())], blur=blur, depth=depth, haze=haze, tint=tint, flip=flip,
+                shadow=False, idle_off=kw.pop("idle_off", False), **kw)
+
+
+def fg_plate(name, blur=8.0, depth=1.6, scale=1.4, offset=(0, 0), only=None):
+    """foreground PLATE layers (e.g. a set's grass/rock layer) scaled up, blurred and with extra parallax."""
+    out = []
+    for L in plates(name, scale, offset):
+        if only and not any(L["src"].endswith(f"_{o}.png") for o in only):
+            continue
+        out.append(dict(L, blur=blur, depth=depth, opaque=False))
+    return out
+
+
+def mood(kind, t=0.0, **kw):
+    """mood light overlay: kind spotlight (stage light: dark all around a pool of light at `at`, r), rays (radial
+    sunburst behind a subject at `at`), dim (darken the whole frame, amount)."""
+    return overlay("mood", t, mode=kind, **kw)
+
+
+def joint(D, pos, scale, pose, name="head", flip=False):
+    """screen px (before camera moves) of a character joint (head, handL, handR, footL, ...) for a toon placed at
+    pos / scale in `pose` - use it to frame close-ups (cam_on(joint(...), "CU")) or to pin overlays to a hand."""
+    j = T.joints(D, pose) if hasattr(T, "joints") else None
+    if j is None:
+        fr = np.zeros((E.H, E.W, 3), np.float32)
+        A = np.array([[scale, 0, pos[0]], [0, scale, pos[1]]], np.float64)
+        j = T.render_char(fr, D, pose, A, flip=flip)
+        return tuple(float(v) for v in j[name])
+    v = np.asarray(j[name], float) * (-1 if flip else 1, 1)
+    return (pos[0] + v[0] * scale, pos[1] + v[1] * scale)
 
 
 def main(shots, context=None, name=None):

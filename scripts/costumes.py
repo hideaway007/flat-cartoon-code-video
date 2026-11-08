@@ -23,6 +23,22 @@ drawn exactly like before (Joe/Simon). Colours BGR.
             plume BGR or None, hat_wings = long | short for wushamao, hat_dy = move the hat up/down)
   moustache none | walrus | handlebar | thin ;  beard none | stubble | short | long   (colour: beard, default hair)
   lashes    True draws eyelashes
+  modern    garment blazer (tweed: shirt, tie loosened, elbow patches; colours shirt, tie, patch, tweed=False for plain)
+            | hoodie (hood bunched at the neck, kangaroo pocket, ribbed hem); girth scales the torso width (0.9 thin)
+            glasses halfmoon | round (+ glasses_col; pose field specs 0 low on the nose, 1 pushed to the tip, -1 up)
+            lanyard BGR (cord + ID card on the chest), headphones BGR (resting around the neck), brow_w (1.7 bushy)
+            hair receding (grey tufts + combed-over wisps) | curtains (middle-parted fringe)
+  ep02 (Little Bighorn project copy only, not in the skill):
+            garment buckskin (fringed frontier jacket, open over a `shirt` colour, fringe on sleeves/hem/yoke;
+            `fringe` colour, default jacket) | shirt (tucked-in work/flannel shirt, placket + fall collar; `vest` BGR
+            draws a field vest with pockets over it); sleeves fringe | rolled (rolled to the elbow)
+            kerchief BGR (knotted neckerchief); belt_style cartridge (brass cartridge loops)
+            headwear slouch (wide-brim slouch hat; `brim` extra width, default 116) | boonie (soft bush hat) | cap
+            (baseball cap, bill toward the facing; hat2 = front patch or None)
+            style curly (short hair with curls; curls show under a hat); moustache droop (big drooping ends)
+            legwear jeans (denim + seams); footwear tall (knee boots, trousers tucked in)
+            held prop detector (metal detector: armrest, control box, coil kept just above the ground in front of
+            the feet; pose field sweep -1..1 swings the coil back/forward, design keys detector, detector_coil)
 
 Held props (pose fields heldL / heldR, angle rotL / rotR): see HELD. Presets: PRESETS (python costumes.py ->
 production/review/presets.jpg shows every preset in a few poses).
@@ -64,17 +80,27 @@ GARMENT = dict(   # per-garment defaults: sleeve style, skirt hem (fraction of l
     lamellar=dict(sleeves="long", skirt=0.44, flare=58),
     segmentata=dict(sleeves="short", skirt=0.4, flare=38),
     coat=dict(sleeves="long", skirt=0.64, flare=34),
+    blazer=dict(sleeves="long", skirt=0.24, flare=24),
+    hoodie=dict(sleeves="long", skirt=0.0, flare=0),
     uniform=dict(sleeves="long", skirt=0.17, flare=22),
     kilt=dict(sleeves="none", skirt=0.44, flare=40),
+    buckskin=dict(sleeves="fringe", skirt=0.26, flare=30),     # ep02: fringed frontier jacket (Custer)
+    shirt=dict(sleeves="long", skirt=0.0, flare=0),            # ep02: tucked-in work / flannel shirt (+ vest)
+    trade_shirt=dict(sleeves="long", skirt=0.22, flare=26),    # ep02: loose untucked trade-cloth / calico shirt
+    dress=dict(sleeves="dress", skirt=0.8, flare=46),          # ep02: Plains wool (stroud) dress, wide sleeves
 )
 HEADWEAR = ("none", "beanie", "nasal", "greathelm", "kettle", "kabuto", "galea", "crown", "tophat", "tricorn", "kasa",
-            "turban", "hood", "wushamao", "nemes", "viking", "chinese_helm")
-HAIR = ("messy", "beanie", "short", "bald", "long", "topknot", "bun", "tonsure", "none")
-MOUSTACHE = ("none", "walrus", "handlebar", "thin")
+            "turban", "hood", "wushamao", "nemes", "viking", "chinese_helm", "slouch", "boonie", "cap")
+HAIR = ("messy", "beanie", "short", "bald", "long", "topknot", "bun", "tonsure", "receding", "curtains", "curly",
+        "none")
+MOUSTACHE = ("none", "walrus", "handlebar", "thin", "droop")
 BEARD = ("none", "stubble", "short", "long")
 HELD = ("none", "sword", "gladius", "katana", "spear", "axe", "hammer", "mallet", "mace", "bow", "longbow", "arrow",
         "crossbow", "shield_round", "shield_kite", "shield_heater", "scutum", "scroll", "scroll_open", "book", "torch",
-        "flag", "banner", "quill", "lantern", "paper_lantern", "wrench", "staff", "crook")
+        "flag", "banner", "quill", "lantern", "paper_lantern", "wrench", "staff", "crook",
+        "mug", "red_pen", "stamp", "sticker", "detector",
+        "note", "exam", "exam_f", "cartridge", "beer", "bugle", "folder")
+UPRIGHT = ("book", "scroll_open", "exam", "exam_f", "folder", "note", "cartridge")   # props that stay upright
 SHIELDS = ("shield_round", "shield_kite", "shield_heater", "scutum")
 BOWS = ("bow", "longbow")
 
@@ -124,7 +150,7 @@ class Ctx:
         kind = s.held(side)
         rotd = math.radians(s.p.get("rotL" if side < 0 else "rotR", 0.0))
         c = wr + 8 * np.array([math.cos(af), math.sin(af)])
-        if kind in SHIELDS or kind in ("book", "scroll_open"):
+        if kind in SHIELDS or kind in UPRIGHT:
             return c, -math.pi / 2 + s.lean + rotd          # strapped / held flat: stays upright
         base = math.pi / 2 if kind == "crossbow" else 0.0
         a = af - math.pi / 2 + base + rotd
@@ -162,6 +188,9 @@ class Ctx:
 
     def moustache(s):
         moustache(s)
+
+    def glasses(s):
+        glasses(s)
 
 
 # ------------------------------------------------------------------------------------------------- heraldry
@@ -236,6 +265,7 @@ def device(pt, her, center, size, ang, clip=None, line=LINE * 0.6):
 def behind_body(C):
     """cape and quiver: behind legs/torso in front & 3/4 views, over the back in the back view."""
     D, pt, up, T, k = C.D, C.pt, C.up, C.T, C.k
+    _blanket_back(C)
     if D.get("quiver") and not C.back:
         _quiver(C)
     if D.get("cape"):
@@ -325,6 +355,29 @@ def leg(C, side, hj, knee, ank):
     elif lw == "striped" and not back:
         pt.line([hj + (side * 30, 0), knee + (side * 30, 0), ank + (side * 30, -20)], LINE * 1.2,
                 D.get("stripe", RED))
+    elif lw == "leggings":    # Plains trade-cloth leggings: broad side flap with a beaded strip (`beads`)
+        nrm = _perp(_n(ank - hj))
+        out = side if C.fac == "f" else (-side if back else -1)
+        if np.dot(nrm, (out, 0)) < 0:
+            nrm = -nrm
+        fl = D.get("legging_flap", dk(col, 0.86))
+        top = hj + (knee - hj) * D.get("flap_top", 0.15)
+        a0, a1 = top + nrm * 36, ank + nrm * 34 + (0, -10)
+        pt.shape([a0, knee + nrm * 40, a1, a1 + nrm * 34 + (0, 10), knee + nrm * 80, a0 + nrm * 30], fl, LINE * 0.7)
+        if D.get("beads"):    # beaded strip: a band with blocks of a second colour (reads as beadwork, not a stripe)
+            path = crom([a0 + nrm * 16, knee + nrm * 56, a1 + nrm * 18], False, 8)
+            pt.stroke(path, D["beads"], 22, LINE * 0.4, shade=False)
+            Ls = np.r_[0, np.cumsum(np.hypot(*np.diff(path, axis=0).T))]
+            b2 = D.get("beads2", RED)
+            for s in np.arange(20, Ls[-1] - 14, 46):
+                q0 = np.array([np.interp(s, Ls, path[:, 0]), np.interp(s, Ls, path[:, 1])])
+                q1 = np.array([np.interp(s + 16, Ls, path[:, 0]), np.interp(s + 16, Ls, path[:, 1])])
+                pt.stroke([q0, q1], b2, 14, 0, shade=False)
+    elif lw == "jeans":       # outer seam stitched in a lighter thread + a pale crease at the knee
+        sc = D.get("stitch", (90, 170, 220))
+        o = side * (24 if not back else -24)
+        pt.line([hj + (o, 8), knee + (o, 0), ank + (o, -24)], LINE * 0.35, sc)
+        pt.line([knee + (-26, -10), knee + (0, -2), knee + (26, -12)], LINE * 0.35, dk(col, 0.75), smooth=True)
     foot(C, side, ank, D.get("footwear") or "boots")
 
 
@@ -342,6 +395,16 @@ def foot(C, side, ank, fw):
     toe = 1 if fac == "r" else (side * 0.35 if fac == "f" else side * 0.15)
     bx, by = ank[0], ank[1] + 28
     col = D.get("boots", LEATHER)
+    if fw == "tall":          # knee boots: shaft from just below the knee, trousers tucked in, a flared top
+        _, knee, _ = C.legs[side]
+        dl = ank - knee
+        top = knee + dl * 0.14
+        pt.stroke([top, ank + (0, 8)], col, 106)
+        nrm = _perp(_n(dl))
+        pt.shape([top - nrm * 58 - _n(dl) * 6, top + nrm * 58 - _n(dl) * 6, top + nrm * 54 + _n(dl) * 26,
+                  top - nrm * 54 + _n(dl) * 26], dk(col, 0.82) if sum(col) > 200 else tuple(min(255, v + 18) for v in col),
+                 LINE * 0.7, shade=False)
+        fw = "boots"
     if fw in ("boots", "sabatons"):
         boot = [(bx - 52 + 20 * min(toe, 0), by - 42), (bx + 40 + 50 * max(toe, 0) * 0.6, by - 34),
                 (bx + 62 + 62 * max(toe, 0), by + 4), (bx + 58 + 60 * max(toe, 0), by + 36),
@@ -360,7 +423,20 @@ def foot(C, side, ank, fw):
                 (bx - 52 + 50 * min(toe, 0), by + 36), (bx - 54 + 24 * min(toe, 0), by + 12)]
         if back:
             shoe = [(bx - 48, by - 6), (bx + 48, by - 6), (bx + 52, by + 36), (bx - 52, by + 36)]
+        if fw == "moccasins":     # soft hide moccasin: rounded, a cuff at the ankle, beaded band over the instep
+            fill = D.get("moccasin", (130, 170, 200))
+            shoe = [(bx - 46 + 16 * min(toe, 0), by - 14), (bx + 24 + 40 * max(toe, 0), by - 16),
+                    (bx + 56 + 60 * max(toe, 0), by + 8), (bx + 52 + 58 * max(toe, 0), by + 36),
+                    (bx - 50 + 50 * min(toe, 0), by + 36), (bx - 52 + 24 * min(toe, 0), by + 6)]
+            if back:
+                shoe = [(bx - 48, by - 14), (bx + 48, by - 14), (bx + 52, by + 36), (bx - 52, by + 36)]
         pt.blob(shoe, fill, n=6)
+        if fw == "moccasins":
+            pt.shape([(bx - 40, by - 30), (bx + 40, by - 30), (bx + 44, by - 6), (bx - 44, by - 6)], fill, LINE * 0.6,
+                     shade=False)
+            if D.get("beads") and not back:
+                pt.stroke([(bx - 24 + 30 * max(toe, 0), by + 2), (bx + 20 + 50 * max(toe, 0), by + 6)],
+                          D.get("moc_beads", D["beads"]), 16, LINE * 0.4, shade=False)
         if fw == "sandals":
             pt.shape([(bx - 54 + 50 * min(toe, 0), by + 24), (bx + 56 + 58 * max(toe, 0), by + 24),
                       (bx + 56 + 58 * max(toe, 0), by + 38), (bx - 54 + 50 * min(toe, 0), by + 38)], col, LINE * 0.6)
@@ -428,7 +504,25 @@ def belt(C, col=None, buckle=None, style=None, y0=-20, y1=16):
         return
     if style == "sash":
         y0, y1 = -46, 18
+    if style == "cartridge":  # wide leather/canvas belt, a row of brass cartridge heads in loops
+        y0, y1 = -30, 22
+        brass = D.get("brass", (70, 170, 214))
+        x0, x1 = -122 + 16 * k, 122 - 22 * k
+        for x in np.arange(x0 + 14, x1 - 8, 24):
+            if not C.back and abs(x - cx) < 34:
+                continue
+            pt.shape(up([(x - 8, y0 - 16), (x + 8, y0 - 16), (x + 8, y0 + 8), (x - 8, y0 + 8)]), brass, LINE * 0.45,
+                     shade=False)
+    if style == "tacks":      # wide hide belt studded with brass tacks (Plains women's belt), no buckle
+        y0, y1 = -34, 18
     pt.shape(up([(-132 + 16 * k, y0), (132 - 22 * k, y0), (134 - 22 * k, y1), (-134 + 16 * k, y1)]), col, LINE * 0.8)
+    if style == "tacks":
+        for x in np.arange(-110 + 16 * k, 112 - 22 * k, 30):
+            pt.dot(*up((x, (y0 + y1) / 2)), 8, D.get("brass", (70, 170, 214)))
+        return
+    if style == "cartridge":
+        for x in np.arange(-122 + 16 * k + 2, 122 - 22 * k, 24):
+            pt.line(up([(x, y0 + 4), (x, y1 - 4)]), LINE * 0.35, dk(col, 0.7))
     if C.back:
         return
     if style == "sash":
@@ -625,12 +719,475 @@ def torso(C):
             for r, cc in ((150, D.get("trim", GOLD)), (118, BLUE), (88, RED_DK), (62, D.get("trim", GOLD))):
                 pt.shape(up(np.vstack([ellipse_pts(nx, ny, r * 0.95, r * 0.74, 0, 40, 0.1, math.pi - 0.1)])), cc,
                          LINE * 0.6, shade=False)
+    elif g == "buckskin":
+        _buckskin(C, col, dkc, cx, f, flare)
+    elif g == "shirt":
+        _work_shirt(C, col, dkc, cx)
+    elif g == "trade_shirt":
+        _trade_shirt(C, col, dkc, cx, f, flare)
+    elif g == "dress":
+        _dress(C, col, dkc, cx, f, flare)
+    elif g == "blazer":
+        _blazer(C, col, dkc, cx, f, flare)
+    elif g == "hoodie":
+        _hoodie(C, col, dkc, cx)
     if D.get("cape_trim") == "ermine" and D.get("cape") and not back:   # ermine shoulder cape
         sw = C.sh_w
         pt.blob(up([(-sw - 10 + 18 * k, -T + 40), (-sw + 30, -T - 10), (sw - 30, -T - 10), (sw + 10 - 26 * k, -T + 40),
                     (sw - 30, -T * 0.68), (cx, -T * 0.62), (-sw + 30, -T * 0.68)]), WHITE, n=6)
         for x, y in ((-80, -0.8), (-20, -0.72), (40, -0.8), (90, -0.72), (-100, -0.9)):
             _ermine_spot(pt, up((x + 20 * k, T * y)), 1.0)
+    if D.get("breechcloth"):
+        _breechcloth(C, cx)
+    if D.get("blanket"):
+        _blanket(C, cx)
+    if D.get("apron"):
+        _apron(C, cx)
+    neckwear(C)
+
+
+# ------------------------------------------------------------------------------------------------- ep02 frontier / field dress
+def _fringe_band(pt, pts, col, depth=40, step=18, line=LINE * 0.55):
+    """a fringe hanging below the polyline pts (filled comb: band + ink slits)."""
+    pts = np.asarray(pts, float)
+    top = crom(pts, False, 6)
+    bot = top + np.array([0, depth])
+    pt.shape(np.vstack([top, bot[::-1]]), col, line, shade=False)
+    L = np.r_[0, np.cumsum(np.hypot(*np.diff(top, axis=0).T))]
+    for s in np.arange(step * 0.6, L[-1] - step * 0.3, step):
+        q = np.array([np.interp(s, L, top[:, 0]), np.interp(s, L, top[:, 1])])
+        pt.line([q + (0, 6), q + (0, depth)], LINE * 0.32)
+
+
+def _buckskin(C, col, dkc, cx, f, flare):
+    """fringed buckskin frontier jacket, open over a dark shirt; fringe on the hem and across the chest yoke."""
+    D, pt, up, T, k, back = C.D, C.pt, C.up, C.T, C.k, C.back
+    fr = D.get("fringe", col)
+    hL, hR = skirt(C, f, flare, col, split=0 if back else 46)
+    hm = (hL + hR) / 2 + np.array([0, 14])
+    if back:
+        _fringe_band(pt, [hL, hm, hR], fr, 44)
+    else:
+        _fringe_band(pt, [hL, (hL + hm) / 2 + (0, 6), hm - (30, -2)], fr, 44)
+        _fringe_band(pt, [hm + (30, 2), (hR + hm) / 2 + (0, 6), hR], fr, 44)
+    pt.blob(up(tor_poly(C, 132, 136)), col, n=8)
+    sw = C.sh_w
+    if back:
+        _fringe_band(pt, up([(-sw + 16, -T + 70), (0, -T * 0.66), (sw - 16, -T + 70)]), fr, 34)
+        pt.line(up([(cx - 4, -T * 0.6), (cx - 4, 16)]), LINE * 0.5)
+    else:
+        shirt = D.get("shirt", BLUE)
+        pt.shape(up([(cx - 48, -T + 2), (cx + 48, -T + 2), (cx + 34, 22), (cx - 30, 22)]), shirt, LINE * 0.8)
+        for y in (-T * 0.62, -T * 0.42, -T * 0.22):      # bib-front shirt buttons
+            for sg in (-1, 1):
+                pt.dot(*up((cx + sg * 20, y)), 7, D.get("trim", (200, 200, 205)))
+        for sg in (-1, 1):                               # yoke fringe either side of the opening
+            a = (sg * (sw - 22) + (18 * k if sg < 0 else -26 * k), -T + 56)
+            b = (cx + sg * 52, -T * 0.6)
+            _fringe_band(pt, up([a, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + 16), b]), fr, 32)
+        for sg in (-1, 1):                               # jacket front edges
+            pt.line(up([(cx + sg * 48, -T + 4), (cx + sg * 40, -T * 0.5), (cx + sg * 34, 22)]), LINE * 0.7, dkc)
+    belt(C, style=D.get("belt_style", "cartridge"))
+
+
+def _work_shirt(C, col, dkc, cx):
+    """tucked-in work / flannel shirt: fall collar, buttoned placket; optional field vest with pockets."""
+    D, pt, up, T, k, back = C.D, C.pt, C.up, C.T, C.k, C.back
+    pt.blob(up(tor_poly(C, 128, 132)), col, n=8)
+    vest = D.get("vest")
+    sw = C.sh_w
+    if back:
+        if vest:
+            pt.blob(up([(-sw + 14, -T + 26), (-60, -T + 6), (60, -T + 6), (sw - 14, -T + 26), (132, -T * 0.4),
+                        (126, 14), (-126, 14), (-132, -T * 0.4)]), vest, n=6)
+            pt.line(up([(-90, -T * 0.55), (0, -T * 0.6), (90, -T * 0.55)]), LINE * 0.5, smooth=True)
+    else:
+        pt.line(up([(cx, -T + 30), (cx - 2, 20)]), LINE * 0.55)
+        for y in (-T * 0.7, -T * 0.48, -T * 0.26):
+            pt.dot(*up((cx + 10, y)), 8, D.get("trim", (220, 220, 225)))
+        if vest:
+            pk = D.get("vest_dk", dk(vest, 0.82))
+            L_ = [(-sw + 18 + 18 * k, -T + 22), (cx - 34, -T + 4), (cx - 30, 18), (-126 + 16 * k, 18),
+                  (-134, -T * 0.42)]
+            R_ = [(cx + 34, -T + 4), (sw - 18 - 26 * k, -T + 22), (134 - 20 * k, -T * 0.42), (126 - 22 * k, 18),
+                  (cx + 30, 18)]
+            for poly, sg in ((L_, -1), (R_, 1)):
+                pt.shape(up(poly), vest, LINE * 0.8)
+                for (py, ph) in ((-T * 0.66, 62), (-T * 0.3, 70)):    # pocket + flap on each panel
+                    x0 = cx + sg * 44 if sg > 0 else cx - 44 - 64
+                    x0 = x0 - (14 * k if sg > 0 else 0)
+                    pt.shape(up([(x0, py), (x0 + 64, py), (x0 + 64, py + ph), (x0, py + ph)]), vest, LINE * 0.55,
+                             shade=False)
+                    pt.shape(up([(x0 - 3, py - 4), (x0 + 67, py - 4), (x0 + 67, py + 16), (x0 - 3, py + 16)]), pk,
+                             LINE * 0.55, shade=False)
+    if not back:
+        for sg in (-1, 1):                               # fall collar
+            pt.shape(up([(cx + sg * 4, -T + 12), (cx + sg * 70, -T - 2), (cx + sg * 48, -T + 52)]),
+                     D.get("collar_col", col), LINE * 0.7, shade=False)
+    belt(C, col=D.get("belt", LEATHER), style=D.get("belt_style", "leather"))
+
+
+# ------------------------------------------------------------------------------------------------- ep02 Lakota / Cheyenne dress
+def _print_dots(C, x0, x1, y0, y1, col, step=40, r=6):
+    """calico print: small dots on a jittered grid (torso frame)."""
+    pt, up = C.pt, C.up
+    for i, y in enumerate(np.arange(y0, y1, step)):
+        for j, x in enumerate(np.arange(x0, x1, step)):
+            jx, jy = ((i * 7 + j * 13) % 11 - 5) * 1.6, ((i * 5 + j * 3) % 9 - 4) * 1.6
+            px = x + jx + (step / 2 if i % 2 else 0)
+            if px > x1:
+                continue
+            pt.dot(*up((px, y + jy)), r, col)
+
+
+def _trade_shirt(C, col, dkc, cx, f, flare):
+    """loose untucked trade-cloth / calico shirt (Plains men, 1870s): hem over the hips, slit neck with ties,
+    shoulder yoke seam; optional calico print (`print` BGR) and an open cloth vest (`vest`, `vest_trim`)."""
+    D, pt, up, T, k, back = C.D, C.pt, C.up, C.T, C.k, C.back
+    hL, hR = skirt(C, f, flare, col, top=-30, w0=136)
+    pr = D.get("print")
+    if pr:
+        hm = (hL + hR) / 2
+        for u in (0.25, 0.5, 0.75):
+            q = hL + (hR - hL) * u + (0, -26)
+            pt.dot(q[0], q[1], 6, pr)
+    pt.blob(up(tor_poly(C, 134, 138)), col, n=8)
+    sw = C.sh_w
+    if pr:
+        _print_dots(C, -118 + 16 * k, 120 - 22 * k, -T + 40, 10, pr)
+    vest = D.get("vest")
+    if back:
+        if vest:
+            pt.blob(up([(-sw + 14, -T + 26), (-60, -T + 6), (60, -T + 6), (sw - 14, -T + 26), (134, -T * 0.4),
+                        (128, 16), (-128, 16), (-134, -T * 0.4)]), vest, n=6)
+        return
+    pt.line(up([(-sw + 30 + 18 * k, -T + 56), (cx, -T + 70), (sw - 30 - 26 * k, -T + 56)]), LINE * 0.45, smooth=True)
+    pt.line(up([(cx, -T + 10), (cx + 2, -T * 0.6)]), LINE * 0.6)              # neck slit
+    for sg in (-1, 1):                                                       # its ties
+        pt.line(up([(cx, -T + 40), (cx + sg * 14, -T + 74)]), LINE * 0.4, D.get("trim", dkc))
+    if vest:
+        vt = D.get("vest_trim")
+        L_ = [(-sw + 16 + 18 * k, -T + 22), (cx - 40, -T + 6), (cx - 26, -T * 0.4), (cx - 40, 14), (-128 + 16 * k, 14),
+              (-136, -T * 0.42)]
+        R_ = [(cx + 40, -T + 6), (sw - 16 - 26 * k, -T + 22), (136 - 20 * k, -T * 0.42), (128 - 22 * k, 14),
+              (cx + 40, 14), (cx + 26, -T * 0.4)]
+        for poly in (L_, R_):
+            pt.shape(up(poly), vest, LINE * 0.8)
+            if vt:                                                           # trimmed / beaded front edge
+                pt.line(up(poly[1:4]), LINE * 0.9, vt)
+        for y in (-T * 0.5, -T * 0.3):
+            pt.dot(*up((cx - 30, y)), 8, D.get("trim", (200, 200, 205)))
+    belt(C, col=D.get("belt", LEATHER), style=D.get("belt_style", "none"))
+
+
+ELK_TOOTH = (226, 236, 240)
+
+
+def _dress(C, col, dkc, cx, f, flare):
+    """Plains wool (stroud) trade-cloth dress, 1870s Lakota / Cheyenne: T-cut, hem at mid-calf with the undyed
+    selvage edge (`selvage`), a deep cape-like yoke decorated with rows of elk teeth (`teeth` BGR, `yoke` BGR yoke
+    cloth, `yoke_trim` BGR bead line along its edge); wide hide belt with brass tacks (belt_style tacks)."""
+    D, pt, up, T, k, back = C.D, C.pt, C.up, C.T, C.k, C.back
+    hL, hR = skirt(C, f, flare, col, top=-30, w0=138)
+    sel = D.get("selvage", (226, 230, 232))
+    _hem_band(C, hL, hR, sel)
+    hm = (hL + hR) / 2 + np.array([0, 14])
+    pt.line(crom([hL + (0, -34), hm + (0, -34), hR + (0, -34)], False, 6).tolist(), LINE * 0.9,
+            D.get("yoke_trim", RED))
+    pt.blob(up(tor_poly(C, 138, 140)), col, n=8)
+    sw = C.sh_w
+    yk = D.get("yoke", col)
+    teeth = D.get("teeth", ELK_TOOTH)
+    dip = -T * 0.5 if not back else -T * 0.58
+    yoke = [(-sw - 12 + 18 * k, -T + 70), (-sw + 4 + 18 * k, -T + 18), (-60, -T - 4), (60, -T - 4),
+            (sw - 4 - 26 * k, -T + 18), (sw + 12 - 26 * k, -T + 70), (sw - 50 - 26 * k, -T * 0.62), (cx, dip),
+            (-sw + 50 + 18 * k, -T * 0.62)]
+    pt.blob(up(yoke), yk, n=6)
+    edge = [yoke[5], yoke[6], yoke[7], yoke[8], yoke[0]]
+    pt.line(up(edge), LINE * 1.0, D.get("yoke_trim", RED), smooth=True)
+    # rows of elk teeth following the yoke's curve
+    for r, frac in enumerate((0.78, 0.5, 0.22)):
+        q = crom(np.array(edge, float), False, 10)
+        top = np.array([(cx, -T + 10)], float)
+        row = q * frac + (1 - frac) * np.array([cx, -T + 6]) + np.array([0, -18 * frac])
+        row[:, 0] = cx + (q[:, 0] - cx) * (0.55 + 0.45 * frac)
+        L_ = np.r_[0, np.cumsum(np.hypot(*np.diff(row, axis=0).T))]
+        n = max(3, int(L_[-1] / 34))
+        for s in np.linspace(L_[-1] * 0.04, L_[-1] * 0.96, n):
+            x, y = np.interp(s, L_, row[:, 0]), np.interp(s, L_, row[:, 1])
+            if back and abs(x) < 4:
+                continue
+            c = up((x, y))
+            pt.ell(c[0], c[1], 9, 13, teeth, LINE * 0.4, C.lean)
+    if not back:
+        pt.line(up([(cx - 30, -T + 6), (cx, -T + 30), (cx + 30, -T + 6)]), LINE * 0.6, smooth=True)   # neck opening
+    belt(C, col=D.get("belt", LEATHER), style=D.get("belt_style", "tacks"))
+
+
+def _breechcloth(C, cx):
+    """trade-cloth breechcloth: front (and back) flap hanging from the belt to above the knee, selvage stripe."""
+    D, pt, up, k, back = C.D, C.pt, C.up, C.k, C.back
+    col = D["breechcloth"]
+    f = D.get("breech_len", 0.62)
+    yb = C.leg_len * f
+    x = cx if not back else 0
+    q = up([(x - 44, 14), (x + 44, 14), (x + 58, yb), (x - 58, yb)])      # hangs over the belt's lower edge
+    pt.shape(q, col, LINE * 0.8)
+    s = D.get("selvage", (226, 230, 232))
+    pt.shape(up([(x - 56, yb - 40), (x + 56, yb - 40), (x + 58, yb - 22), (x - 57, yb - 22)]), s, LINE * 0.5,
+             shade=False)
+
+
+def _blanket(C, cx):
+    """trade / stroud blanket. blanket = BGR; blanket_mode waist (wrapped round the waist, rolled top, to below the
+    knees) | shawl (round the shoulders, the two ends hanging down the front; the back panel is drawn by
+    behind_body); blanket_band = BGR stripe near the edge, blanket_band2 = thin second stripe."""
+    D, pt, up, T, k, back = C.D, C.pt, C.up, C.T, C.k, C.back
+    col = D["blanket"]
+    band = D.get("blanket_band", (226, 230, 232))
+    band2 = D.get("blanket_band2")
+    mode = D.get("blanket_mode", "waist")
+    if mode == "waist":
+        f = D.get("blanket_len", 0.66)
+        hL, hR = skirt(C, f, 44, col, top=-40, w0=142)
+        hm = (hL + hR) / 2 + np.array([0, 14])
+        for off, c_, w in ((-70, band, 30), (-38, band2, 12)):
+            if c_ is None:
+                continue
+            a, b = hL + (6, off), hR + (-6, off)
+            pt.shape(np.vstack([crom([a, hm + (0, off), b], False, 6), crom([b + (2, w), hm + (0, off + w), a + (-2, w)],
+                                                                             False, 6)]), c_, LINE * 0.5, shade=False)
+        pt.shape(up([(-144 + 16 * k, -58), (144 - 22 * k, -58), (148 - 22 * k, -16), (-148 + 16 * k, -16)]), col,
+                 LINE * 0.9)                                                   # rolled top
+        pt.line(up([(-140 + 16 * k, -36), (0, -32), (140 - 22 * k, -36)]), LINE * 0.4, dk(col, 0.7), smooth=True)
+        if not back:                                                           # overlapping front edge
+            ox = cx + 40
+            pt.line([up((ox, -16)), hm + (60 + 40 * k, -4)], LINE * 0.7)
+            pt.line([up((ox - 30, 20)), (up((ox - 30, 20)) + hm + (30, -20)) / 2 + (-6, 0)], LINE * 0.4,
+                    dk(col, 0.7))
+    elif mode == "shawl" and not back:
+        sw = C.sh_w
+        bot = D.get("shawl_low", -0.06)
+        for sg in (-1, 1):            # narrow ends hanging off the shoulders: the dress yoke stays visible between
+            if k and sg > 0:
+                xo, xi = sw - 4 - 26 * k, sw - 44 - 26 * k
+            else:
+                xo = sg * (sw + 24) + (18 * k if sg < 0 else 0)
+                xi = sg * (sw - 26) + (18 * k if sg < 0 else 0)
+            q = [(xi + sg * -14, -T - 2), (sg * (sw - 20) + (18 * k if sg < 0 else -26 * k), -T - 16),
+                 (xo, -T + 30), (xo + sg * 12, T * bot), (xi + sg * 8, T * bot + 10), (xi, -T * 0.5)]
+            pt.blob(up(q), col, LINE, n=5)
+            yb = T * bot
+            pt.shape(up([(xo + sg * 9, yb - 40), (xi + sg * 7, yb - 32), (xi + sg * 7, yb - 16), (xo + sg * 11, yb - 24)]),
+                     band, LINE * 0.45, shade=False)
+            for u in np.linspace(0.1, 0.9, 5):                                 # fringe on the ends
+                x = xi + sg * 7 + (xo + sg * 11 - xi - sg * 7) * u
+                y = yb + 10 * (1 - u)
+                pt.line(up([(x, y), (x, y + 30)]), LINE * 0.4)
+
+
+def _blanket_back(C):
+    """the part of a shawl / blanket seen behind the body (front views) or over the back (back view)."""
+    D, pt, up, T, k = C.D, C.pt, C.up, C.T, C.k
+    if not D.get("blanket") or D.get("blanket_mode", "waist") != "shawl":
+        return
+    col = D["blanket"]
+    sw = C.sh_w
+    bot = D.get("shawl_low", -0.06)
+    q = [(-sw - 28 + 18 * k, -T + 26), (-70, -T - 20), (70, -T - 20), (sw + 28 - 26 * k, -T + 26),
+         (sw + 44 - 26 * k, T * bot), (0, T * bot + 30), (-sw - 44 + 18 * k, T * bot)]
+    pt.blob(up(q), col, n=5)
+    if C.back:
+        band = D.get("blanket_band", (226, 230, 232))
+        pt.shape(up([(-sw - 40 + 18 * k, T * bot - 44), (0, T * bot - 16), (sw + 40 - 26 * k, T * bot - 44),
+                     (sw + 42 - 26 * k, T * bot - 22), (0, T * bot + 6), (-sw - 42 + 18 * k, T * bot - 22)]), band,
+                 LINE * 0.45, shade=False)
+
+
+def _apron(C, cx):
+    """long white bib-less waist apron (1890s bartender), tied at the waist, to just below the knee."""
+    D, pt, up, k, back = C.D, C.pt, C.up, C.k, C.back
+    col = D["apron"]
+    if back:
+        pt.stroke(up([(-128, -4), (128, -4)]), col, 18, LINE * 0.5, shade=False)
+        pt.blob(up([(-10, -14), (-50, 30), (-30, 60), (0, 0), (30, 60), (50, 30), (10, -14)]), col, LINE * 0.5, n=3)
+        return
+    hL, hR = skirt(C, D.get("apron_len", 0.66), 20, col, top=-10, w0=126)
+    pt.shape(up([(-132 + 16 * k, -22), (132 - 22 * k, -22), (134 - 22 * k, 2), (-134 + 16 * k, 2)]), col, LINE * 0.7)
+    pt.line([up((cx - 30, 10)), (hL + hR) / 2 + (-20, -10)], LINE * 0.35, dk(col, 0.82))
+    pt.line([up((cx + 50, 10)), (hL + hR) / 2 + (70, -10)], LINE * 0.35, dk(col, 0.82))
+
+
+# ------------------------------------------------------------------------------------------------- modern dress
+def _tweed(C, x0, x1, y0, y1, col, skip=None, step=44):
+    """herringbone flecks: short alternating diagonal ticks on a jittered grid (torso frame)."""
+    pt, up = C.pt, C.up
+    tc = dk(col, 0.78)
+    for i, y in enumerate(np.arange(y0, y1, step)):
+        for j, x in enumerate(np.arange(x0, x1, step)):
+            jx, jy = ((i * 7 + j * 13) % 11 - 5) * 2.2, ((i * 5 + j * 3) % 9 - 4) * 2.2
+            px, py = x + jx + (step / 2 if i % 2 else 0), y + jy
+            if px > x1 or (skip and skip(px, py)):
+                continue
+            s = 1 if (i + j) % 2 else -1
+            pt.line(up([(px - 7, py - 7 * s), (px + 7, py + 7 * s)]), LINE * 0.3, tc)
+
+
+def _blazer(C, col, dkc, cx, f, flare):
+    D, pt, up, T, k, back = C.D, C.pt, C.up, C.T, C.k, C.back
+    gw = D.get("girth", 1.0)
+    w0, w1 = 124 * gw, 126 * gw
+    skirt(C, f, flare, col, split=0 if back else 56, top=-30, w0=w0 + 6)
+    pt.blob(up(tor_poly(C, w0, w1)), col, n=8)
+    bt = -T * 0.3                                       # the one fastened button
+    vee = lambda x, y: (not back) and y < bt + 10 and abs(x - cx) < 18 + 74 * (bt - y) / (bt + T)
+    if D.get("tweed", True):
+        _tweed(C, -w1 + 26 + 16 * k, w1 - 26 - 20 * k, -T + 40, 0, col, vee)
+    if back:
+        pt.line(up([(0, -T + 20), (2, -T * 0.4), (0, 14)]), LINE * 0.55, smooth=True)
+        pt.shape(up([(-64, -T - 24), (64, -T - 24), (70, -T + 14), (-70, -T + 14)]), col, LINE * 0.8)
+        return
+    shirt = D.get("shirt", (236, 222, 200))
+    pt.shape(up([(cx - 60, -T + 2), (cx + 60, -T + 2), (cx + 10, bt), (cx - 10, bt)]), shirt, LINE * 0.7, shade=False)
+    pt.shape(up([(cx - 18, -T - 2), (cx + 18, -T - 2), (cx, -T + 34)]), WHITE, LINE * 0.5, shade=False)   # open top
+    tie = D.get("tie", RED_DK)
+    kx, ky = cx + 6, -T + 58                            # knot pulled down and a little askew
+    pt.blob(up([(kx - 22, ky - 22), (kx + 24, ky - 18), (kx + 14, ky + 20), (kx - 10, ky + 18)]), tie, LINE * 0.7, n=4)
+    pt.shape(up([(kx - 12, ky + 16), (kx + 12, ky + 18), (kx + 30, bt - 6), (kx + 14, bt + 6), (kx - 4, bt - 2)]),
+             tie, LINE * 0.7)
+    for sg in (-1, 1):                                  # shirt collar points, spread open
+        pt.shape(up([(cx + sg * 20, -T - 6), (cx + sg * 64, -T - 2), (cx + sg * 40, -T + 46)]), shirt, LINE * 0.7,
+                 shade=False)
+    lap = dk(col, 0.9)
+    for sg in (-1, 1):                                  # notched lapels down to the button
+        pt.shape(up([(cx + sg * 58, -T + 6), (cx + sg * 100, -T + 16), (cx + sg * 92, -T + 70),
+                     (cx + sg * 110, -T + 84), (cx + sg * 12, bt + 4)]), lap, LINE * 0.8)
+        pt.line(up([(cx + sg * 92, -T + 70), (cx + sg * 74, -T + 76)]), LINE * 0.5)
+    pt.dot(*up((cx + 2, bt + 10)), 12, D.get("trim", (40, 60, 90)))
+    pc = D.get("trim", (40, 60, 90))
+    for sg in (-1, 1):                                  # lower pocket flaps
+        pt.shape(up([(cx + sg * 40, -T * 0.14), (cx + sg * 104, -T * 0.16), (cx + sg * 102, -T * 0.08),
+                     (cx + sg * 40, -T * 0.06)]), col, LINE * 0.6)
+    pt.line(up([(cx - 98, -T * 0.66), (cx - 52, -T * 0.64)]), LINE * 0.6)        # breast pocket welt
+    pt.shape(up([(cx - 92, -T * 0.66), (cx - 84, -T * 0.78), (cx - 70, -T * 0.66)]), pc, LINE * 0.5)  # pen in pocket
+    for sg in (-1, 1):                                  # crumples at the waist
+        pt.line(up([(cx + sg * 96, -T * 0.44), (cx + sg * 78, -T * 0.38), (cx + sg * 88, -T * 0.32)]), LINE * 0.45,
+                smooth=True)
+
+
+def _hoodie(C, col, dkc, cx):
+    D, pt, up, T, k, back = C.D, C.pt, C.up, C.T, C.k, C.back
+    gw = D.get("girth", 1.0)
+    w0, w1 = 138 * gw, 140 * gw
+    pt.blob(up(tor_poly(C, w0, w1)), col, n=8)
+    rib = D.get("jacket_dk", dk(col, 0.82))
+    pt.shape(up([(-w0 + 14 + 16 * k, -30), (w0 - 14 - 22 * k, -30), (w0 - 6 - 22 * k, 20), (-w0 + 6 + 16 * k, 20)]),
+             rib, LINE * 0.7)
+    for x in np.linspace(-w0 + 40, w0 - 40, 9):
+        pt.line(up([(x + 8 * k, -24), (x + 8 * k, 14)]), LINE * 0.3, dk(rib, 0.8))
+    if back:   # hood hanging down the back
+        pt.blob(up([(-112, -T + 12), (-96, -T - 36), (96, -T - 36), (112, -T + 12), (74, -T * 0.52), (0, -T * 0.42),
+                    (-74, -T * 0.52)]), col, n=6)
+        pt.line(up([(0, -T - 30), (0, -T * 0.46)]), LINE * 0.55)
+        return
+    pt.shape(up([(cx - 92, -T * 0.38), (cx + 92, -T * 0.38), (cx + 112, -34), (cx - 112, -34)]), col, LINE * 0.6)
+    for sg in (-1, 1):                                  # pocket openings
+        pt.line(up([(cx + sg * 92, -T * 0.38), (cx + sg * 118, -T * 0.2), (cx + sg * 112, -34)]), LINE * 0.6,
+                smooth=True)
+    pt.blob(up([(cx - 124, -T + 34), (cx - 122, -T - 20), (cx - 62, -T - 52), (cx + 62, -T - 52),
+                (cx + 122, -T - 20), (cx + 124, -T + 34), (cx + 62, -T + 12), (cx, -T + 26), (cx - 62, -T + 12)]),
+            col, n=6)                                   # hood bunched around the neck
+    pt.line(up([(cx - 70, -T + 2), (cx, -T + 18), (cx + 70, -T + 2)]), LINE * 0.5, smooth=True)
+    for sg in (-1, 1):                                  # drawstrings
+        a = up((cx + sg * 26, -T + 20))
+        b = up((cx + sg * 34, -T * 0.62))
+        pt.stroke([a, (a + b) / 2 + (sg * 4, 0), b], D.get("cord", WHITE), 12, LINE * 0.45, smooth=True, shade=False)
+        pt.shape([b + (-9, -2), b + (9, -2), b + (7, 26), b + (-7, 26)], dk(col, 0.6), LINE * 0.4, shade=False)
+
+
+def neckwear(C):
+    """lanyard + ID card, headphones resting around the neck (over any garment)."""
+    D, pt, up, T, k, back = C.D, C.pt, C.up, C.T, C.k, C.back
+    cx = 10 + 30 * k
+    if D.get("kerchief"):     # knotted neckerchief: band round the neck, knot + two tails at the front
+        kc = D["kerchief"]
+        if back:
+            pt.blob(up([(-80, -T + 4), (80, -T + 4), (40, -T + 60), (0, -T + 84), (-40, -T + 60)]), kc, LINE * 0.8, n=4)
+        else:
+            pt.blob(up([(cx - 76, -T + 2), (cx + 76, -T + 2), (cx + 52, -T + 40), (cx - 52, -T + 40)]), kc, LINE * 0.8,
+                    n=4)
+            for dx, ln in ((-22, 96), (20, 84)):
+                pt.blob(up([(cx + dx * 0.4 - 14, -T + 36), (cx + dx * 0.4 + 14, -T + 36), (cx + dx + 16, -T + 36 + ln),
+                            (cx + dx - 14, -T + 40 + ln)]), kc, LINE * 0.7, n=3)
+            pt.ell(*up((cx, -T + 40)), 24, 20, kc, LINE * 0.7)
+    if D.get("choker") and not back:   # hair-pipe choker: rows of long white bone pipes, a brass bead in the middle
+        pc = D["choker"]
+        for i, (y0, w) in enumerate(((-T + 12, 62), (-T + 32, 66))):
+            pt.shape(up([(cx - w, y0), (cx + w, y0), (cx + w - 2, y0 + 18), (cx - w + 2, y0 + 18)]), pc, LINE * 0.55,
+                     shade=False)
+            for x in np.arange(cx - w + 24, cx + w - 10, 24):
+                pt.line(up([(x, y0 + 2), (x, y0 + 16)]), LINE * 0.35)
+        pt.line(up([(cx, -T + 10), (cx, -T + 52)]), LINE * 0.5, D.get("choker_bead", (160, 92, 40)))
+        pt.ell(*up((cx, -T + 32)), 12, 12, D.get("brass", (70, 170, 214)), LINE * 0.4)
+    if D.get("lanyard") and not back:
+        lc = D["lanyard"]
+        clip = up((cx + 8, -T * 0.4))
+        for sg in (-1, 1):
+            pt.stroke([up((cx + sg * 58, -T + 4)), up((cx + sg * 34, -T * 0.68)), clip], lc, 15, LINE * 0.45,
+                      smooth=True, shade=False)
+        top = -T * 0.4 + 18
+        card = [(cx - 40, top), (cx + 56, top), (cx + 56, top + 122), (cx - 40, top + 122)]
+        pt.shape(up(card), WHITE, LINE * 0.7, shade=False)
+        pt.shape(up([(cx - 40, top), (cx + 56, top), (cx + 56, top + 30), (cx - 40, top + 30)]), lc, LINE * 0.5,
+                 shade=False)
+        pt.shape(up([(cx - 28, top + 42), (cx + 4, top + 42), (cx + 4, top + 80), (cx - 28, top + 80)]),
+                 (200, 200, 200), LINE * 0.4, shade=False)
+        pt.ell(*up((cx - 12, top + 56)), 9, 9, WHITE, LINE * 0.3, shade=False)
+        for y in (top + 52, top + 70, top + 98):
+            pt.line(up([(cx + 14, y), (cx + 44, y)]) if y < top + 90 else up([(cx - 26, y), (cx + 40, y)]),
+                    LINE * 0.35, (90, 90, 100))
+        pt.ell(*clip, 12, 12, STEEL, LINE * 0.5)
+    if D.get("headphones"):
+        hc = D["headphones"]
+        if back:
+            pt.stroke(up([(-118, -T + 2), (0, -T - 44), (118, -T + 2)]), hc, 26, LINE * 0.6, smooth=True)
+            for sg in (-1, 1):
+                pt.ell(*up((sg * 124, -T + 22)), 40, 50, hc, LINE * 0.8, C.lean)
+            return
+        pt.stroke(up([(cx - 84, -T + 40), (cx, -T - 30), (cx + 84, -T + 40)]), hc, 22, LINE * 0.6, smooth=True)
+        for sg in (-1, 1):
+            if k and sg > 0:
+                continue          # 3/4 view: the far cup (screen-right) is hidden behind the neck and chin
+            c = up((cx + sg * (84 + 10 * k), -T + 56))
+            pt.ell(c[0], c[1], 40, 50, hc, LINE * 0.8, C.lean + sg * 0.3)
+            pt.ell(c[0] - sg * 2, c[1] + 2, 22, 32, dk(hc, 0.5), LINE * 0.45, C.lean + sg * 0.3, shade=False)
+
+
+def glasses(C):
+    """glasses over the eyes; pose field specs slides them along the nose (0 low, 1 at the tip, -1 up)."""
+    D, pt, H, p = C.D, C.pt, C.H, C.p
+    kind = D.get("glasses")
+    if kind in (None, "none") or C.back:
+        return
+    s = p.get("specs", 0.0)
+    fc = D.get("glasses_col", INK)
+    y0 = 24 + 24 * s if kind == "halfmoon" else 10 + 20 * s
+    fsx = C.fsx
+    xs = [fsx + sd * 46 * (0.82 if (fsx and sd < 0) else 1.0) for sd in (-1, 1)]
+    for sd, x in zip((-1, 1), xs):
+        if kind == "halfmoon":
+            lens = np.vstack([[(x + 34, y0)], ellipse_pts(x, y0, 34, 24, 0, 16, 0, math.pi), [(x + 34, y0)]])
+        else:
+            lens = ellipse_pts(x, y0, 32, 30, 0, 28)
+            lens = np.vstack([lens, lens[:1]])
+        pt.line(H(lens), LINE * 0.55, fc)
+        pt.line(H([(x + 8, y0 + 6), (x + 18, y0 + 14)]) if kind == "halfmoon" else H([(x + 6, y0 - 12), (x + 16, y0 - 4)]),
+                LINE * 0.35, (200, 200, 200))
+        ex = x + sd * 34
+        if not (fsx and sd < 0):
+            pt.line(H([(ex, y0 + 2), (sd * (C.rx - 6) + fsx * 0.4, y0 - 16)]), LINE * 0.5, fc)
+    ty = y0 + (2 if kind == "halfmoon" else -2)
+    pt.line(H([(xs[0] + 34, ty), ((xs[0] + xs[1]) / 2, ty - 8), (xs[1] - 34, ty)]), LINE * 0.5, fc, smooth=True)
 
 
 def _hem_band(C, hL, hR, col):
@@ -700,7 +1257,42 @@ def sleeve(C, side, sh, el, wr):
         col = D.get("mail", STEEL)
     if g == "plate":
         col = D.get("steel", D.get("jacket", STEEL))
-    if sty in ("long", "mail", "plate"):
+    if sty == "fringe":       # buckskin sleeve with a fringe hanging off its lower edge
+        fr = D.get("fringe", col)
+        g_ = np.array([0.0, 1.0])
+        for a, b in ((sh + (el - sh) * 0.2, el), (el, wr - (wr - el) * 0.2)):
+            d = _n(b - a)
+            n = _perp(d)
+            nd = n if np.dot(n, g_) >= 0 else -n
+            if abs(np.dot(d, g_)) > 0.93:     # hanging straight: fringe on the back (outer) seam
+                nd = np.array([-1.0 if C.fac == "r" or side < 0 else 1.0, 0.0])
+            q = [a + nd * 30, b + nd * 30, b + nd * 64, a + nd * 64]
+            pt.shape(q, fr, LINE * 0.5, shade=False)
+            for u in np.linspace(0.1, 0.9, 6):
+                m = a + (b - a) * u
+                pt.line([m + nd * 40, m + nd * 64], LINE * 0.32)
+        pt.stroke([sh, el, wr], col, 78)
+    elif sty == "rolled":     # sleeve rolled up past the elbow, bare forearm
+        pt.stroke([sh, el, wr], SKIN, 62)
+        d = _n(wr - el)
+        cuff = el + d * 26
+        pt.stroke([sh, cuff], col, 78)
+        nn = _perp(d)
+        pt.shape([cuff - nn * 44 - d * 12, cuff + nn * 44 - d * 12, cuff + nn * 42 + d * 18, cuff - nn * 42 + d * 18],
+                 D.get("roll", dk(col, 0.86)), LINE * 0.7, shade=False)
+        return
+    elif sty == "dress":      # Plains wool dress: open cape-like sleeve hanging under the upper arm, bare forearm
+        pt.stroke([sh, el, wr], SKIN, 62)
+        end = el + _n(wr - el) * 30
+        g_ = np.array([0.0, 1.0])
+        a = sh + (el - sh) * 0.3
+        flap = [a, end, end + g_ * 74 + _n(end - a) * 8, (a + end) / 2 + g_ * 70, a + g_ * 40]
+        pt.blob(flap, col, LINE * 0.8, n=4)
+        pt.shape([a + g_ * 30, (a + end) / 2 + g_ * 58, end + g_ * 60, end + g_ * 72, (a + end) / 2 + g_ * 70,
+                  a + g_ * 42], D.get("selvage", (226, 230, 232)), LINE * 0.4, shade=False)
+        pt.stroke([sh, el, end], col, 92)
+        return
+    elif sty in ("long", "mail", "plate"):
         pt.stroke([sh, el, wr], col, 76 if sty == "long" else 80)
     elif sty == "short":
         pt.stroke([sh, el, wr], SKIN, 62)
@@ -767,6 +1359,29 @@ def sleeve(C, side, sh, el, wr):
         q = wr - d * 34
         pt.shape([q - nn * 40, q + nn * 40, q + nn * 40 + d * 22, q - nn * 40 + d * 22],
                  D.get("jacket_dk", dk(col)), LINE * 0.6, shade=False)
+    if g == "blazer" and sty == "long":
+        d = _n(wr - el)
+        if D.get("tweed", True):
+            for u in (0.3, 0.7):
+                for o in (-18, 16):
+                    q = sh + (el - sh) * u + _perp(_n(el - sh)) * o
+                    pt.line([q - (7, 7), q + (7, 7)], LINE * 0.3, dk(col, 0.78))
+        pc = el + d * 8                                  # suede elbow patch with stitching
+        ang = math.atan2(d[1], d[0]) - math.pi / 2
+        pt.ell(pc[0], pc[1], 30, 40, D.get("patch", (40, 62, 96)), LINE * 0.6, ang)
+        st = ellipse_pts(pc[0], pc[1], 21, 31, ang, 14)
+        for a_, b_ in zip(st[::2], st[1::2]):
+            pt.line([a_, b_], LINE * 0.25, (150, 170, 190))
+        q = wr - d * 30
+        pt.line([q - _perp(d) * 38, q + _perp(d) * 38], LINE * 0.5)
+    if g == "hoodie" and sty == "long":                  # ribbed cuff
+        d = _n(wr - el)
+        nn = _perp(d)
+        q = wr - d * 40
+        pt.shape([q - nn * 36, q + nn * 36, q + nn * 34 + d * 30, q - nn * 34 + d * 30],
+                 D.get("jacket_dk", dk(col, 0.82)), LINE * 0.6, shade=False)
+        for u in (-0.5, 0.0, 0.5):
+            pt.line([q + nn * 34 * u + d * 4, q + nn * 34 * u + d * 26], LINE * 0.25, dk(col, 0.6))
     if g == "kilt":
         d = _n(el - sh)
         nn = _perp(d)
@@ -991,9 +1606,178 @@ def prop(C, kind, side):
         pt.blob(R([(230, -40), (300, -60), (340, -36), (300, -22), (300, 22), (340, 36), (300, 60), (230, 40)]),
                 STEEL, LINE * 0.8, n=3)
         tip = R([(320, 0)])[0]
+    elif kind == "mug":        # chipped mug held by its handle, body beside the hand (stays upright)
+        hs = 1 if C.fac != "b" else -1
+        o = c + np.array([hs * 92, -46])
+        mc = D.get("mug", (200, 226, 238))
+        hp = [o + (-hs * 56, -34), c + (-hs * 6, -30), c + (-hs * 8, 12), o + (-hs * 56, 26)]
+        pt.stroke(crom(hp, False, 6), mc, 22, LINE * 0.7, shade=False)
+        pt.shape([o + (-58, -66), o + (58, -66), o + (52, 70), o + (-52, 70)], mc, LINE * 0.9)
+        pt.ell(o[0], o[1] - 66, 58, 15, (50, 70, 100), LINE * 0.7, shade=False)          # coffee
+        chip = o + (hs * 30, -72)                                                        # the chip in the rim
+        pt.shape([chip + (-16, -4), chip + (16, -4), chip + (2, 16)], mc, LINE * 0.5, shade=False)
+        pt.line([chip + (2, 16), chip + (8, 34)], LINE * 0.35)
+        fx = o[0] - 12
+        for a_, b_ in (((fx, o[1] - 30), (fx, o[1] + 40)), ((fx, o[1] - 30), (fx + 34, o[1] - 30)),
+                       ((fx, o[1] + 2), (fx + 26, o[1] + 2))):
+            pt.stroke([np.array(a_), np.array(b_)], RED, 14, LINE * 0.35, shade=False)
+        if D.get("steam", True):
+            for dx in (-16, 18):
+                pt.line([o + (dx, -96), o + (dx + 12, -126), o + (dx - 4, -154), o + (dx + 8, -182)], LINE * 0.9,
+                        (225, 225, 225), smooth=True)
+        tip = o + (0, -66)
+    elif kind == "red_pen":
+        pt.stroke(R([(-40, 0), (120, 0)]), RED, 26, LINE * 0.7)
+        pt.stroke(R([(60, 0), (124, 0)]), RED_DK, 28, LINE * 0.7)
+        pt.line(R([(70, -12), (110, -12)]), LINE * 0.4, STEEL)
+        pt.shape(R([(-40, -13), (-78, -3), (-82, 0), (-78, 3), (-40, 13)]), WHITE, LINE * 0.6, shade=False)
+        pt.dot(*R([(-80, 0)])[0], 6, RED)
+        tip = R([(-82, 0)])[0]
+    elif kind == "stamp":      # rubber stamp, handle up, red pad down (stays upright)
+        pt.ell(c[0], c[1] - 74, 36, 32, WOOD, LINE * 0.8)
+        pt.stroke([c + (0, -50), c + (0, 46)], WOOD, 30, LINE * 0.8)
+        pt.shape([c + (-76, 40), c + (76, 40), c + (76, 92), c + (-76, 92)], WOOD_DK, LINE * 0.8)
+        pt.shape([c + (-80, 92), c + (80, 92), c + (80, 112), c + (-80, 112)], RED, LINE * 0.7, shade=False)
+        tip = c + (0, 112)
+    elif kind == "detector":
+        tip = _detector(C, c, side)
+    elif kind in ("exam", "exam_f"):
+        tip = _exam(C, c, side, kind)
+    elif kind == "note":       # small folded paper held up between the fingers (upright)
+        u_ = _n(R([(1, 0)])[0] - c)
+        r_ = -_perp(u_)
+        o = c + u_ * 52
+        w, h = 56, 44
+        pc = D.get("note", PAPER)
+        pt.shape([o - r_ * w - u_ * h, o + r_ * w - u_ * h + u_ * 6, o + r_ * w + u_ * h, o - r_ * w + u_ * h - u_ * 4],
+                 pc, LINE * 0.7)
+        pt.line([o - u_ * h + u_ * 2, o + u_ * h - u_ * 1], LINE * 0.4, dk(pc, 0.75))          # the fold
+        pt.shape([o + r_ * w + u_ * h, o + r_ * (w - 22) + u_ * h, o + r_ * w + u_ * (h - 20)], dk(pc, 0.88),
+                 LINE * 0.4, shade=False)                                                    # dog-ear
+        for v in (-14, 6):
+            pt.line([o + r_ * 10 + u_ * v, o + r_ * (w - 14) + u_ * v], LINE * 0.3, (110, 110, 120))
+        tip = o
+    elif kind == "cartridge":  # one fired brass .45-55 case, held up between finger and thumb (upright, mouth up)
+        u_ = _n(R([(1, 0)])[0] - c)
+        r_ = -_perp(u_)
+        br = D.get("cartridge", (64, 178, 226))
+        b0, b1 = c + u_ * 6, c + u_ * 112
+        pt.shape([b0 - r_ * 17, b1 - r_ * 15, b1 + r_ * 15, b0 + r_ * 17], br, LINE * 0.6)
+        pt.shape([b0 - r_ * 21, b0 - r_ * 21 + u_ * 10, b0 + r_ * 21 + u_ * 10, b0 + r_ * 21], dk(br, 0.85), LINE * 0.5,
+                 shade=False)                                                                 # rim
+        pt.ell(b1[0], b1[1], 14, 6, (40, 70, 90), LINE * 0.4, C.lean, shade=False)           # open mouth
+        pt.line([b0 + r_ * 6 + u_ * 22, b1 + r_ * 6 - u_ * 12], LINE * 0.35, (200, 236, 250))  # glint
+        if D.get("cartridge_glint", True):
+            for ang in (0.0, 0.8, -0.8):
+                d_ = rot(np.array([0.0, -1.0]), ang)
+                pt.line([b1 + d_ * 24, b1 + d_ * 44], LINE * 0.45, (110, 220, 250))
+        tip = b1
+    elif kind == "beer":       # glass beer mug with a foam head, held by its handle (stays upright)
+        hs = 1 if C.fac != "b" else -1
+        o = c + np.array([hs * 88, -44])
+        gl = (226, 226, 214)
+        hp = [o + (-hs * 50, -38), c + (-hs * 4, -34), c + (-hs * 6, 14), o + (-hs * 50, 30)]
+        pt.stroke(crom(hp, False, 6), gl, 22, LINE * 0.7, shade=False)
+        pt.shape([o + (-54, -62), o + (54, -62), o + (50, 70), o + (-50, 70)], D.get("beer", (40, 156, 224)), LINE * 0.9)
+        pt.shape([o + (-50, 52), o + (50, 52), o + (50, 70), o + (-50, 70)], gl, LINE * 0.5, shade=False)  # glass base
+        for x in (-26, 0, 26):                                                     # facets of the glass
+            pt.line([o + (x, -40), o + (x * 0.95, 46)], LINE * 0.3, (90, 196, 240))
+        pt.line([o + (-38, -30), o + (-36, 36)], LINE * 0.5, (190, 236, 250))      # glint
+        pt.blob([o + (-62, -58), o + (-60, -88), o + (-30, -106), o + (2, -96), o + (34, -110), o + (62, -86),
+                 o + (60, -58), o + (36, -50), o + (40, -24), o + (26, -50)], WHITE, LINE * 0.8, n=4)
+        tip = o + (0, -96)
+    elif kind == "bugle":      # brass cavalry trumpet: one long loop, bell forward, mouthpiece back, yellow cord
+        _bugle(pt, R, D)
+        tip = R([(280, 0)])[0]
+    elif kind == "folder":     # manila file folder (upright above the hand; rotL=180 hangs it below the hand)
+        u_ = _n(R([(1, 0)])[0] - c)
+        r_ = -_perp(u_)
+        o = c + u_ * 120
+        mc = D.get("folder", (120, 196, 226))
+        P_ = lambda x, y: o + r_ * x + u_ * y
+        pt.shape([P_(-112, -140), P_(112, -140), P_(112, 140), P_(-30, 140), P_(-40, 160), P_(-104, 160),
+                  P_(-112, 140)], dk(mc, 0.9), LINE * 0.8)                                      # back + tab
+        pt.shape([P_(-92, 150), P_(-52, 150), P_(-52, 140), P_(-92, 140)], WHITE, LINE * 0.3, shade=False)  # label
+        pt.shape([P_(-96, -124), P_(104, -124), P_(100, 150), P_(-96, 150)], WHITE, LINE * 0.5, shade=False)  # papers
+        pt.shape([P_(-112, -140), P_(112, -140), P_(108, 126), P_(-112, 126)], mc, LINE * 0.8)      # front cover
+        pt.line([P_(-60, 90), P_(60, 90)], LINE * 0.35, dk(mc, 0.7))
+        pt.line([P_(-60, 70), P_(30, 70)], LINE * 0.35, dk(mc, 0.7))
+        tip = o
+    elif kind == "sticker":    # round sticker on the fingertip: the "dead" face, one corner peeling
+        o = R([(118, 0)])[0]
+        sc_ = D.get("sticker", (60, 214, 250))
+        pt.ell(o[0], o[1], 54, 54, sc_, LINE * 0.8)
+        for sg in (-1, 1):
+            e = o + (sg * 20, -10)
+            pt.line([e + (-9, -9), e + (9, 9)], LINE * 0.55)
+            pt.line([e + (-9, 9), e + (9, -9)], LINE * 0.55)
+        pt.line([o + (-16, 24), o + (16, 24)], LINE * 0.55)
+        pt.shape([o + (28, -46), o + (50, -24), o + (36, -22)], WHITE, LINE * 0.5, shade=False)
+        tip = o
     if tip is not None:
         C.joints["tip" + tag] = np.asarray(tip, float)
         C.joints["grip" + tag] = c
+
+
+DETECTOR_SHAFT = (196, 192, 188)
+DETECTOR_COIL = (62, 60, 64)
+
+
+def detector_coil_pos(C, c):
+    """where the search coil sits (char units, y=0 is the ground): just above the ground in front of the feet.
+    Pose field sweep (-1..1) swings it back/forward (3/4 view) or left/right (front/back view)."""
+    sw = C.p.get("sweep", 0.0)
+    if C.fac == "r":
+        return np.array([max(c[0] + 360 + 160 * sw, 150.0), -40.0])
+    return np.array([c[0] * 0.35 + 230 * sw, -14.0 if C.fac == "f" else -52.0])
+
+
+def _detector(C, c, side):
+    """1980s metal detector: armrest + grip, control box, telescopic shaft, cable, flat round search coil.
+    The shaft always runs from the hand to the coil, so the coil stays just above the ground whatever the arm does."""
+    pt, D = C.pt, C.D
+    shaft = D.get("detector", DETECTOR_SHAFT)
+    coilc = D.get("detector_coil", DETECTOR_COIL)
+    co = detector_coil_pos(C, c)
+    top = co + np.array([0, -16])                    # where the lower shaft meets the coil's yoke
+    d = _n(top - c)
+    n = _perp(d)
+    if n[1] > 0:
+        n = -n                                       # n = the shaft's upper side
+    _, el, wr = C.arms[side]
+    fa = _n(el - wr)                                 # up the forearm: the armrest sits under it, near the elbow
+    back_end = c + fa * min(110.0, 0.75 * float(np.hypot(*(el - wr))))
+    # coil first (the shaft and yoke sit on top of it)
+    pt.ell(co[0], co[1], 112, 28, coilc, LINE * 0.9)
+    pt.line([co + (-92, -6), co + (0, -18), co + (92, -6)], LINE * 0.4, (150, 150, 156), smooth=True)
+    pt.shape([top + (-22, -6), top + (22, -6), top + (16, 14), top + (-16, 14)], coilc, LINE * 0.6, shade=False)
+    # lower (telescopic) shaft + cable wrapped round it
+    pt.stroke([c, top], shaft, 18, LINE * 0.7)
+    j = c + (top - c) * 0.5
+    pt.stroke([j - d * 14, j + d * 14], dk(shaft, 0.7), 28, LINE * 0.6, shade=False)
+    L = float(np.hypot(*(top - c)))
+    cab = [c + d * (110 + s) + n * (14 if i % 2 else -14) for i, s in enumerate(np.linspace(0, max(L - 150, 40), 9))]
+    pt.line(cab + [top + (0, 4)], LINE * 0.35, smooth=True)
+    # upper shaft, armrest cuff at the back end
+    pt.stroke([back_end, c, c + d * 20], dk(shaft, 0.85), 22, LINE * 0.7)
+    na = _perp(fa)
+    if na[1] > 0:
+        na = -na
+    cuff = [back_end - na * 6 + fa * 10, back_end + na * 40 + fa * 22, back_end + na * 46 - fa * 6,
+            back_end + na * 14 - fa * 40, back_end - fa * 44]
+    pt.blob(cuff, BLACK, LINE * 0.7, n=4)
+    pt.stroke([c + fa * 40, c + d * 36], BLACK, 30, LINE * 0.6, shade=False)         # rubber grip
+    # control box with a meter on the shaft just below the hand
+    b0 = c + d * 64
+    box = [b0 - n * 6, b0 + d * 96 - n * 6, b0 + d * 96 + n * 62, b0 + n * 62]
+    pt.shape(box, D.get("detector_box", (70, 70, 76)), LINE * 0.75)
+    m0 = b0 + d * 18 + n * 18
+    meter = [m0, m0 + d * 58, m0 + d * 58 + n * 34, m0 + n * 34]
+    pt.shape(meter, (200, 236, 240), LINE * 0.4, shade=False)
+    mc = m0 + d * 29 + n * 2
+    pt.line([mc, mc + d * 14 + n * 26], LINE * 0.35, RED)
+    pt.dot(*(b0 + d * 84 + n * 30), 8, (60, 200, 250))
+    return co
 
 
 def _flame(pt, fc, s):
@@ -1075,6 +1859,10 @@ def head_back(C, over=False):
     guards cover the back of the head, so they are drawn again over the egg (over=True, from head_front)."""
     D, pt, H, rx, ry, hw, back = C.D, C.pt, C.H, C.rx, C.ry, C.hw, C.back
     hy = C.hy
+    if D.get("feather") and not back and not over:
+        _feather(C)
+    if D.get("style") == "ponytail" and not back and not over:
+        _ponytail(C)
     if back and over != (hw in ("nemes", "kabuto", "galea")):
         return
     st = D.get("style", "short")
@@ -1132,9 +1920,17 @@ def head_front(C):
         hair2(C, st)
     if C.back:
         head_back(C, over=True)
+        if D.get("feather"):
+            _feather(C)
+        if st == "ponytail":
+            _ponytail(C)
+    elif D.get("age_lines"):
+        _age_lines(C)
     hw = C.hw
     if hw not in ("none", "beanie_legacy"):
         headwear(C, hw)
+    if st == "braids" and not C.back:
+        _braids(C)
 
 
 def hair2(C, st):
@@ -1142,8 +1938,25 @@ def hair2(C, st):
     hc = D.get("hair", BLACK)
     sh = 20 * k
     covered = hw in ("nemes", "hood", "turban", "kabuto", "galea", "viking", "nasal", "kettle", "chinese_helm",
-                     "wushamao", "tophat", "tricorn", "kasa")
+                     "wushamao", "tophat", "tricorn", "kasa", "slouch", "boonie", "cap")
+    if st == "curly":
+        _curly(C, covered)
+        return
+    if st == "braids":
+        _braid_cap(C, covered)
+        return
+    if st == "ponytail":          # pulled-back cap; the tail itself is drawn by _ponytail
+        st = "short"
     if back:
+        if st == "curtains":
+            st = "short"
+        if st == "receding":      # horseshoe low on the back of the head + the tufts sticking out at the sides
+            for sg in (-1, 1):
+                pt.blob(H([(sg * (rx - 14), -64), (sg * (rx + 18), -84), (sg * (rx + 44), -54), (sg * (rx + 30), -30),
+                           (sg * (rx + 46), -4), (sg * (rx + 20), 34), (sg * (rx - 14), 24)]), hc, LINE * 0.9, n=5)
+            pt.blob(H([(-rx - 2, 30), (-rx * 0.5, 58), (0, 66), (rx * 0.5, 58), (rx + 2, 30), (rx - 12, 120),
+                       (0, ry + 6), (-rx + 12, 120)]), hc, LINE * 0.9, n=5)
+            return
         if st in ("short", "long", "bun", "topknot"):
             low = ry * 0.72 if st != "long" else ry + 120
             pt.blob(H([(-rx - 8, low), (-rx - 14, -60), (-rx * 0.7, -ry + 6), (0, -ry - 20), (rx * 0.7, -ry + 6),
@@ -1187,6 +2000,29 @@ def hair2(C, st):
             pt.blob(H([(-24 + sh * 0.5, -ry + 10), (24 + sh * 0.5, -ry + 10), (30 + sh * 1.5, -ry - 40),
                        (10 + sh * 2, -ry - 80), (-18 + sh, -ry - 50)]), hc, LINE, n=4)
             pt.line(H([(-22 + sh * 0.5, -ry - 8), (28 + sh, -ry - 14)]), LINE * 1.2, WHITE)
+    elif st == "receding":    # grey side tufts that stick out + a few combed-over wisps
+        for sg in (-1, 1):
+            pt.blob(H([(sg * (rx - 14), -64), (sg * (rx + 18), -84), (sg * (rx + 44), -54), (sg * (rx + 30), -30),
+                       (sg * (rx + 46), -4), (sg * (rx + 20), 34), (sg * (rx - 14), 24)]), hc, LINE * 0.9, n=5)
+        if not covered:
+            for dx, dy in ((-30, 0), (0, -10), (30, -4)):
+                pt.stroke(H([(-rx * 0.62 + dx + sh, -ry + 52 + dy), (dx * 0.4 + sh, -ry + 6 + dy),
+                             (rx * 0.5 + dx * 0.5 + sh, -ry + 34 + dy)]), hc, 13, LINE * 0.5, smooth=True, shade=False)
+    elif st == "curtains":    # middle-parted fringe, volume on top
+        if covered:
+            for sg in (-1, 1):
+                pt.blob(H([(sg * (rx - 6), -70), (sg * (rx + 12), -66), (sg * (rx + 10), 10), (sg * (rx - 16), 0)]),
+                        hc, LINE * 0.9, n=4)
+            return
+        px = sh + 8                                      # parting
+        pt.blob(H([(-rx - 8, 14), (-rx - 22, -56), (-rx * 0.82, -ry + 4), (-rx * 0.3, -ry - 34), (rx * 0.3, -ry - 38),
+                   (rx * 0.82, -ry + 2), (rx + 22, -56), (rx + 8, 14), (rx - 18, 6), (rx - 20, -34),
+                   (rx * 0.55 + sh, -46), (px + 26, -84), (px, -120), (px - 26, -84), (-rx * 0.55 + sh, -46),
+                   (-rx + 20, -34), (-rx + 18, 6)]), hc, n=5)
+        for sg in (-1, 1):
+            pt.line(H([(px + sg * 6, -116), (px + sg * 50, -ry + 4), (px + sg * 96, -ry + 30)]), LINE * 0.55,
+                    smooth=True)
+        pt.line(H([(px, -120), (px - 4, -ry - 20)]), LINE * 0.55)
     elif st == "bun":
         if not covered:
             pt.blob(H([(-rx - 6, 10), (-rx - 16, -60), (-rx * 0.75, -ry + 4), (0, -ry - 22), (rx * 0.75, -ry + 4),
@@ -1198,6 +2034,185 @@ def hair2(C, st):
             for sg in (-1, 1):
                 pt.blob(H([(sg * (rx - 6), -70), (sg * (rx + 12), -66), (sg * (rx + 10), 10), (sg * (rx - 16), 0)]),
                         hc, LINE * 0.9, n=4)
+
+
+def _curly(C, covered):
+    """short hair with curls (Custer, 1876): a cap of hair + curl knobs; under a hat the curls poke out at the
+    sides and the nape."""
+    D, pt, H, rx, ry, k, back = C.D, C.pt, C.H, C.rx, C.ry, C.k, C.back
+    hc = D.get("hair", BLACK)
+    hd = D.get("hair_dk", dk(hc, 0.8))
+    sh = 20 * k
+    if back:
+        low = ry * 0.42
+        if covered:          # only the nape shows under the hat
+            pt.blob(H([(-rx + 2, -40), (rx - 2, -40), (rx - 4, low - 10), (0, low + 10), (-rx + 4, low - 10)]), hc,
+                    n=6)
+        else:
+            pt.blob(H([(-rx - 10, low), (-rx - 16, -60), (-rx * 0.7, -ry + 4), (0, -ry - 22), (rx * 0.7, -ry + 4),
+                       (rx + 16, -60), (rx + 10, low), (0, low + 26)]), hc, n=6)
+        for x, y in ((-rx + 14, low - 14), (-rx * 0.45, low + 4), (0, low + 12), (rx * 0.45, low + 4),
+                     (rx - 14, low - 14)):
+            pt.ell(*H([(x, y)])[0], 24, 21, hc, LINE * 0.75)
+        return
+    knobs = []
+    for sg in (-1, 1):
+        if k and sg > 0:     # 3/4 view: the far side shows less
+            knobs += [(rx - 2, -30)]
+        else:
+            knobs += [(sg * (rx + 6), -42), (sg * (rx + 10), -8)]
+    knobs += [(-rx + 10 if not k else -rx + 2, 24)]
+    if k:
+        knobs += [(-rx - 2, 24 - 30)]
+    if not covered:
+        pt.blob(H([(-rx - 6, 10), (-rx - 16, -60), (-rx * 0.75, -ry + 4), (0, -ry - 28), (rx * 0.75, -ry + 4),
+                   (rx + 16, -60), (rx + 6, 10), (rx - 18, 0), (rx - 28, -60), (sh + 40, -92), (sh, -76),
+                   (-rx * 0.4 + sh, -96), (-rx + 26, -60), (-rx + 18, 0)]), hc, n=5)
+        knobs += [(sh - 50, -ry - 6), (sh + 30, -ry - 14), (sh + 90, -ry + 10), (sh - 110, -ry + 30)]
+        pt.line(H([(sh - 10, -92), (sh + 14, -110), (sh + 40, -96)]), LINE * 0.5, hd, smooth=True)
+    for x, y in knobs:
+        pt.ell(*H([(x, y)])[0], 23, 21, hc, LINE * 0.75)
+        pt.line(H([(x - 8, y + 2), (x + 2, y - 6), (x + 10, y + 2)]), LINE * 0.3, hd, smooth=True)
+
+
+def _braid_cap(C, covered):
+    """hair parted in the middle and drawn back over the ears into two braids (Lakota / Cheyenne). `hair_grey` BGR
+    adds grey streaks (an elder). The braids themselves are drawn by _braids (over the chest)."""
+    D, pt, H, rx, ry, k, back = C.D, C.pt, C.H, C.rx, C.ry, C.k, C.back
+    hc = D.get("hair", BLACK)
+    grey = D.get("hair_grey")
+    sh = 20 * k
+    if back:
+        pt.blob(H([(-rx - 10, 40), (-rx - 16, -60), (-rx * 0.7, -ry + 4), (0, -ry - 20), (rx * 0.7, -ry + 4),
+                   (rx + 16, -60), (rx + 10, 40), (rx - 30, ry * 0.5), (0, ry * 0.56), (-rx + 30, ry * 0.5)]), hc, n=6)
+        pt.line(H([(0, -ry - 14), (0, ry * 0.4)]), LINE * 0.5, dk(hc, 0.6) if sum(hc) > 200 else (90, 90, 96))
+        return
+    if covered:
+        cap = [(-rx - 8, 30), (-rx - 12, -70), (-rx + 10, -80), (-rx + 16, 20)]
+        for sg in (-1, 1):
+            pt.blob(H([(sg * x, y) for x, y in cap]), hc, LINE * 0.9, n=4)
+        return
+    px = sh + 6
+    cap = [(-rx - 8, 34), (-rx - 16, -50), (-rx * 0.76, -ry + 2), (px, -ry - 16), (rx * 0.76, -ry + 2), (rx + 16, -50),
+           (rx + 8, 34), (rx - 16, 26), (rx - 22, -52), (rx * 0.52 + sh, -ry + 50), (px, -ry + 58),
+           (-rx * 0.52 + sh, -ry + 50), (-rx + 22, -52), (-rx + 16, 26)]
+    pt.blob(H(cap), hc, n=5)
+    pt.line(H([(px, -ry + 56), (px - 2, -ry - 10)]), LINE * 0.55, (110, 110, 118) if sum(hc) < 200 else dk(hc, 0.6))
+    # strands combed back from the parting toward the ears: they run between the outer and inner hair edge
+    for i, o in enumerate((0.3, 0.65) if not grey else (0.2, 0.45, 0.7)):
+        for sg in (-1, 1):
+            ox = sh * (1 if sg > 0 else 0.5)
+            q = [(px + sg * 14, -ry + 4 + 46 * o), (sg * rx * (0.76 - 0.24 * o) + ox * 0.5, -ry + 2 + 48 * o),
+                 (sg * (rx + 16 - 38 * o), -50), (sg * (rx + 8 - 24 * o), 20)]
+            c_ = grey if (grey and i != 1) else ((110, 110, 118) if sum(hc) < 200 else dk(hc, 0.6))
+            pt.line(H(q), LINE * (0.55 if grey else 0.4), c_, smooth=True)
+
+
+def _braids(C):
+    """two braids hanging from behind the ears down in front of the shoulders (gravity: they hang straight down
+    whatever the head does). braid_len (units, default 250), braid_wrap = BGR fur / cloth wrapping (None = plaits
+    showing), braid_tie = BGR tie at the end."""
+    D, pt, H, rx, ry, k = C.D, C.pt, C.H, C.rx, C.ry, C.k
+    hc = D.get("hair", BLACK)
+    grey = D.get("hair_grey")
+    wrap = D.get("braid_wrap")
+    L = D.get("braid_len", 340)
+    for sg in (-1, 1):
+        if k:
+            top = H([(-rx + 14, 60)])[0] if sg < 0 else H([(rx - 30, 70)])[0]
+            drift = -6 if sg < 0 else -4
+        else:
+            top = H([(sg * (rx - 14), 60)])[0]
+            drift = -sg * 8
+        mid = top + np.array([drift + sg * 8, L * 0.4])
+        end = top + np.array([drift * 2.5, L])
+        path = crom([top, mid, end], False, 8)
+        pt.stroke(path, hc, 38, LINE * 0.8)
+        Ls = np.r_[0, np.cumsum(np.hypot(*np.diff(path, axis=0).T))]
+
+        def at(s):
+            return np.array([np.interp(s, Ls, path[:, 0]), np.interp(s, Ls, path[:, 1])])
+        for i, s in enumerate(np.arange(18, Ls[-1] - 10, 22)):     # plait chevrons
+            q = at(s)
+            pt.line([q + (-15, -7), q + (0, 4), q + (15, -7)], LINE * 0.4,
+                    grey if (grey and i % 3 == 1) else (dk(hc, 0.55) if sum(hc) > 200 else (96, 96, 104)))
+        tie = D.get("braid_tie", RED)
+        if wrap:
+            a, b = at(Ls[-1] * 0.42), at(Ls[-1] * 0.94)
+            pt.stroke([a, (a + b) / 2 + (sg * 2, 0), b], wrap, 48, LINE * 0.8, smooth=True)
+            for s in np.linspace(Ls[-1] * 0.46, Ls[-1] * 0.9, 7):  # fur / cloth texture ticks
+                q = at(s)
+                pt.line([q + (-17, 4), q + (-6, -6)], LINE * 0.35, dk(wrap, 0.6))
+                pt.line([q + (6, 2), q + (17, -8)], LINE * 0.35, dk(wrap, 0.6))
+            for s in (Ls[-1] * 0.42, Ls[-1] * 0.94):
+                q = at(s)
+                pt.shape([q + (-25, -6), q + (25, -6), q + (25, 6), q + (-25, 6)], tie, LINE * 0.5, shade=False)
+        else:
+            q = at(Ls[-1] * 0.9)
+            pt.shape([q + (-21, -6), q + (21, -6), q + (21, 6), q + (-21, 6)], tie, LINE * 0.5, shade=False)
+        tip = at(Ls[-1])
+        pt.blob([tip + (-12, -6), tip + (12, -6), tip + (9, 30), tip + (0, 40), tip + (-9, 30)], hc, LINE * 0.7, n=4)
+
+
+def _feather(C):
+    """one eagle feather standing up at the back of the head (white, dark tip, a small dyed tuft at the base)."""
+    D, pt, H, rx, ry, k, back = C.D, C.pt, C.H, C.rx, C.ry, C.k, C.back
+    if back:
+        base, tipx = (10, -ry + 70), 30
+    elif k:
+        base, tipx = (-rx * 0.62, -ry + 44), -rx * 0.9
+    else:
+        base, tipx = (-rx * 0.32, -ry + 40), -rx * 0.5
+    L = D.get("feather_len", 250)
+    b = np.array(base, float)
+    t = np.array([tipx, base[1] - L])
+    d = _n(t - b)
+    n = _perp(d)
+    vane = [b + d * 60 + n * 10, b + d * 120 + n * 26, t - d * 30 + n * 24, t + d * 6, t - d * 30 - n * 22,
+            b + d * 120 - n * 24, b + d * 60 - n * 10]
+    pt.blob(H(vane), D.get("feather", WHITE) if isinstance(D.get("feather"), tuple) else WHITE, LINE * 0.8, n=4)
+    dkt = [t - d * 96 + n * 25, t - d * 30 + n * 24, t + d * 6, t - d * 30 - n * 22, t - d * 96 - n * 23,
+           t - d * 84]
+    pt.blob(H(dkt), D.get("feather_tip", (40, 44, 56)), LINE * 0.6, n=3)
+    pt.line(H([b + d * 30, t - d * 20]), LINE * 0.4, (150, 150, 156))
+    pt.blob(H([b + d * 40 + n * 16, b + d * 76 + n * 14, b + d * 70 - n * 14, b + d * 40 - n * 16]),
+            D.get("feather_tuft", RED), LINE * 0.5, n=3)
+    pt.stroke(H([b - d * 6, b + d * 44]), D.get("feather_wrap", (60, 90, 130)), 16, LINE * 0.5, shade=False)
+
+
+def _ponytail(C):
+    """ponytail tied at the back of the head (behind the egg in front / 3/4 views, over it in the back view)."""
+    D, pt, H, rx, ry, k, back = C.D, C.pt, C.H, C.rx, C.ry, C.k, C.back
+    hc = D.get("hair", BLACK)
+    if back:
+        a = H([(0, -ry * 0.3)])[0]
+        pt.blob([a + (-34, -10), a + (34, -10), a + (40, 150), a + (6, 230), a + (-30, 160)], hc, n=5)
+        pt.ell(a[0], a[1], 30, 18, D.get("hair_tie", RED), LINE * 0.6, C.ha)
+        return
+    if k:
+        a = H([(-rx - 4, -ry * 0.25)])[0]
+        pts = [a + (10, -20), a + (-40, -6), a + (-76, 80), a + (-64, 190), a + (-40, 170), a + (-20, 70)]
+    else:
+        a = H([(-rx * 0.5, -ry * 0.5)])[0]
+        pts = [a + (10, -10), a + (-70, 10), a + (-rx * 0.62 - 20, 120), a + (-rx * 0.62 - 6, 230),
+               a + (-rx * 0.62 + 20, 170), a + (-40, 60)]
+    pt.blob(pts, hc, n=5)
+
+
+def _age_lines(C):
+    """a few lines for an older face: smile folds beside the mouth, crow's feet."""
+    pt, H, f = C.pt, C.H, C.fsx
+    mx, my = f + 4, 80
+    col = C.D.get("age_col", (150, 150, 158))
+    for sg in (-1, 1):
+        if f and sg < 0:
+            pt.line(H([(mx - 46, my - 34), (mx - 54, my - 8), (mx - 46, my + 14)]), LINE * 0.45, col, smooth=True)
+            continue
+        pt.line(H([(mx + sg * 50, my - 38), (mx + sg * 60, my - 8), (mx + sg * 52, my + 16)]), LINE * 0.45, col,
+                smooth=True)
+        ex = f + sg * 46 + sg * 34
+        pt.line(H([(ex, 2), (ex + sg * 16, -4)]), LINE * 0.4, col)
+        pt.line(H([(ex, 14), (ex + sg * 16, 18)]), LINE * 0.4, col)
 
 
 def beard(C):
@@ -1238,6 +2253,15 @@ def moustache(C):
         for sg in (-1, 1):
             pt.stroke(H([(mx + sg * 6, my + 4), (mx + sg * 44, my + 4), (mx + sg * 80, my - 6), (mx + sg * 94, my - 28),
                          (mx + sg * 80, my - 40)]), col, 18, LINE * 0.7, smooth=True, shade=False)
+    elif m == "droop":      # big drooping cavalry moustache: two heavy lobes, ends hanging past the mouth corners
+        for sg in (-1, 1):
+            pt.blob(H([(mx + sg * 2, my - 12), (mx + sg * 40, my - 12), (mx + sg * 78, my + 10),
+                       (mx + sg * 98, my + 58), (mx + sg * 86, my + 74), (mx + sg * 62, my + 42),
+                       (mx + sg * 30, my + 22), (mx + sg * 2, my + 16)]), col, LINE * 0.85, n=5)
+        hd = D.get("hair_dk", dk(col, 0.8))
+        for sg in (-1, 1):
+            pt.line(H([(mx + sg * 20, my + 2), (mx + sg * 56, my + 18), (mx + sg * 80, my + 50)]), LINE * 0.35, hd,
+                    smooth=True)
     elif m == "thin":
         for sg in (-1, 1):
             pt.stroke(H([(mx + sg * 8, my + 6), (mx + sg * 40, my + 10), (mx + sg * 58, my + 40),
@@ -1355,6 +2379,58 @@ def headwear(C, hw):
             pt.ell(*Hy([(x + f * 0.4, y0 - 17)])[0], 13, 11, cc, LINE * 0.5)
         for x, y in ((rx - 10, y0 - 70), (rx * 0.5, y0 - 120), (0, y0 - 140), (-rx * 0.5, y0 - 120), (-rx + 10, y0 - 70)):
             pt.ell(*Hy([(x + f * 0.4, y - 8)])[0], 13, 13, acc, LINE * 0.6)
+    elif hw == "slouch":      # wide-brim slouch hat, pinched crown with a centre crease, drooping brim
+        bw = D.get("brim", 116)
+        sh = f * 0.4
+        crown = [(-rx * 0.74, -84), (-rx * 0.76, -ry - 46), (-rx * 0.34 + sh, -ry - 84), (sh, -ry - 64),
+                 (rx * 0.34 + sh, -ry - 84), (rx * 0.76, -ry - 46), (rx * 0.74, -84)]
+        pt.blob(Hy(crown), col, n=6)
+        if not back:
+            pt.line(Hy([(sh, -ry - 62), (sh + 4, -ry - 20)]), LINE * 0.5, smooth=True)
+        pt.shape(Hy([(-rx * 0.75, -122), (rx * 0.75, -122), (rx * 0.74, -86), (-rx * 0.74, -86)]), acc, LINE * 0.8)
+        dip = 22 if not back else 10
+        brim = [(-rx - bw, -54), (-rx - bw * 0.55, -92), (sh, -102), (rx + bw * 0.55, -92), (rx + bw, -54),
+                (rx + bw * 0.5, -60), (f * 0.6, -72 + dip), (-rx - bw * 0.5, -60)]
+        pt.blob(Hy(brim), col, n=5)
+        pt.line(Hy([(-rx - bw * 0.7, -64), (f * 0.6, -82 + dip * 0.6), (rx + bw * 0.7, -64)]), LINE * 0.4,
+                dk(col, 0.7), smooth=True)
+    elif hw == "boonie":      # soft bush hat: round crown, stitched drooping brim
+        sh = f * 0.35
+        pt.blob(Hy([(-rx * 0.86, -76), (-rx * 0.84, -ry - 34), (sh, -ry - 52), (rx * 0.84, -ry - 34),
+                    (rx * 0.86, -76)]), col, n=6)
+        pt.shape(Hy([(-rx * 0.87, -110), (rx * 0.87, -110), (rx * 0.86, -78), (-rx * 0.86, -78)]), acc, LINE * 0.7)
+        brim = [(-rx - 72, -30), (-rx - 40, -86), (sh, -94), (rx + 40, -86), (rx + 72, -30), (rx + 36, -44),
+                (f * 0.6, -58), (-rx - 36, -44)]
+        pt.blob(Hy(brim), col, n=5)
+        for o in (12, 26):
+            pt.line(Hy([(-rx - 64 + o, -38 - o * 0.3), (-rx - 30, -70 + o * 0.4), (f * 0.6, -80 + o * 0.6),
+                        (rx + 30, -70 + o * 0.4), (rx + 64 - o, -38 - o * 0.3)]), LINE * 0.3, dk(col, 0.7),
+                    smooth=True)
+        if not back:
+            for sg in (-1, 1):
+                pt.dot(*Hy([(sg * rx * 0.6 + sh, -ry - 6)])[0], 7, dk(col, 0.6))
+    elif hw == "cap":         # baseball cap, bill toward the facing direction
+        sh = f * 0.4
+        crown = [(-rx - 8, -62), (-rx + 2, -130), (-rx * 0.6, -ry - 24), (sh, -ry - 38), (rx * 0.6, -ry - 24),
+                 (rx - 2, -130), (rx + 8, -62), (sh, -72)]
+        pt.blob(Hy(crown), col, n=6)
+        if back:
+            pt.shape(Hy([(-46, -66), (46, -66), (40, -40), (-40, -40)]), WHITE, LINE * 0.6, shade=False)
+            pt.line(Hy([(-46, -54), (46, -54)]), LINE * 0.5, col)
+        else:
+            for x in (-0.55, 0.0, 0.55):
+                pt.line(Hy([(sh, -ry - 34), (x * rx + sh * 1.6, -70)]), LINE * 0.35, dk(col, 0.7), smooth=True)
+            if D.get("hat2"):
+                pt.shape(Hy([(sh - 36, -128), (sh + 36, -128), (sh + 34, -88), (sh - 34, -88)]), D["hat2"], LINE * 0.5,
+                         shade=False)
+            if k:
+                bill = [(rx * 0.1 + f, -72), (rx + 14, -84), (rx + 126, -66), (rx + 132, -48), (rx + 40, -50),
+                        (rx * 0.1 + f, -56)]
+            else:
+                bill = [(-rx * 0.86, -70), (-rx * 0.4, -86), (rx * 0.4, -86), (rx * 0.86, -70), (rx * 0.5, -46),
+                        (0, -40), (-rx * 0.5, -46)]
+            pt.blob(Hy(bill), D.get("bill", col), n=5)
+        pt.dot(*Hy([(sh, -ry - 36)])[0], 12, dk(col, 0.7))
     elif hw == "tophat":
         pt.shape(Hy([(-rx + 26, -86), (-rx + 16, -ry - 240), (rx - 16, -ry - 240), (rx - 26, -86)]), col, LINE)
         pt.shape(Hy([(-rx + 25, -120), (rx - 25, -120), (rx - 26, -86), (-rx + 26, -86)]), acc, LINE * 0.8)
@@ -1534,3 +2610,34 @@ if __name__ == "__main__":     # preset sheet: python costumes.py [preset ...] -
     out.parent.mkdir(parents=True, exist_ok=True)
     _cv.imwrite(str(out), img, [_cv.IMWRITE_JPEG_QUALITY, 85])
     print(out)
+
+
+def _bugle(pt, R, D):
+    """brass cavalry trumpet along the forearm frame: mouthpiece at the hand, one long loop, bell forward."""
+    br = D.get("bugle", (64, 178, 226))
+    tube = R([(20, -10), (120, -34), (210, -30), (250, -10), (210, 14), (120, 18), (60, 8)])
+    pt.stroke(list(tube), br, 14, LINE * 0.6, smooth=True)
+    bell = R([(230, -30), (290, -56), (300, -40), (300, 22), (290, 36), (230, 10)])
+    pt.shape(list(bell), br, LINE * 0.7)
+    pt.stroke(list(R([(60, 20), (90, 70), (150, 80), (210, 60), (240, 20)])), (40, 186, 236), 6, LINE * 0.4,
+              smooth=True, shade=False)   # yellow cord
+
+
+def _exam(C, c, side, kind):
+    """an exam sheet held upright in front of the chest: header bar, three question lines, boxes; exam_f adds a red F."""
+    pt, D = C.pt, C.D
+    o = c + np.array([-90.0, 10.0])
+    w, h = 160, 175
+    P_ = lambda x, y: o + np.array([x, y], float)
+    pt.shape([P_(-w, -h), P_(w, -h + 6), P_(w - 4, h), P_(-w + 4, h - 4)], D.get("exam", (240, 246, 248)), LINE * 0.8)
+    pt.shape([P_(-w + 24, -h + 24), P_(w - 30, -h + 26), P_(w - 30, -h + 58), P_(-w + 24, -h + 56)], (40, 40, 44), 0,
+             shade=False)
+    for k in range(3):
+        y = -h + 105 + k * 78
+        pt.line([P_(-w + 30, y), P_(w - 96, y)], LINE * 0.35, (110, 110, 120))
+        pt.shape([P_(w - 78, y - 30), P_(w - 30, y - 30), P_(w - 30, y + 14), P_(w - 78, y + 14)], (250, 252, 252),
+                 LINE * 0.35, shade=False)
+    if kind == "exam_f":
+        pt.line([P_(110, -60), P_(30, -60), P_(30, 60)], LINE * 0.9, (52, 56, 214))
+        pt.line([P_(30, 0), P_(90, 0)], LINE * 0.9, (52, 56, 214))
+    return o

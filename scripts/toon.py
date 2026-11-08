@@ -172,6 +172,9 @@ def composite(frame, canvas, x0, y0):
         return
     c = small[fy0 - y0:fy1 - y0, fx0 - x0:fx1 - x0]
     a = c[..., 3:4]
+    if frame.shape[2] == 4:   # a premultiplied BGRA layer (stage: blurred / hazed characters): keep coverage too
+        frame[fy0:fy1, fx0:fx1] = frame[fy0:fy1, fx0:fx1] * (1 - a) + c
+        return
     frame[fy0:fy1, fx0:fx1] = frame[fy0:fy1, fx0:fx1] * (1 - a) + c[..., :3]
 
 
@@ -185,7 +188,7 @@ def composite(frame, canvas, x0, y0):
 # Costume parts (garment, headwear, cape, beard, ... see costumes.py) are drawn by costumes.py; a design without any
 # of those keys takes exactly the original drawing path (Joe/Simon render pixel-identically).
 COSTUME_KEYS = ("garment", "headwear", "cape", "legwear", "footwear", "moustache", "beard", "quiver", "sleeves",
-                "heraldry", "badge", "lashes")
+                "heraldry", "badge", "lashes", "glasses", "lanyard", "headphones")
 
 
 def uses_costumes(D, p=None):
@@ -205,12 +208,18 @@ DEFAULT_POSE = dict(
     hL=(-40.0, 250.0),     # screen-left hand target, relative to the left shoulder, torso frame
     hR=(40.0, 250.0),
     handL="mitt", handR="mitt",   # mitt / fist / two / open / point
-    eyes="dot",            # dot / wide / closed / squint / half / up
+    eyes="dot",            # dot / wide / closed / squint / half / up | side / roll / mismatch / squeeze /
+                           #   spiral / stars / teary (exaggerated: see toon.XEYES)
     look=(0.0, 0.0),       # pupil offset
     brows=(0.0, 0.0),      # (tilt deg: + = worried/raised inner, - = angry), raise units
-    mouth="smile",         # smile / grin / open / shout / flat / grit / gulp / talk
+    mouth="smile",         # smile / grin / open / shout / flat / grit / gulp / talk | frown / twitch / jawdrop /
+                           #   teeth / pout (exaggerated: see toon.XMOUTHS)
     mopen=0.5,             # mouth openness for open/talk
-    sweat=0.0,             # 0..1 sweat drop size
+    sweat=0.0,             # 0..1 sweat drop size; 1..3 adds a second / third drop (panic)
+    tears=0.0,             # 0..1 tear streams running down the cheeks (with eyes="teary" for a full cry)
+    blush=0.0,             # 0..1 pink cheek ovals (embarrassed / smitten)
+    pale=0.0,              # 0..1 dread: blue-grey wash + vertical lines over the upper face
+    vein=0.0,              # 0..1 anger cross (popping vein) on the temple
     prop="none",           # none / coil_chest / coil_shoulder / pack
     coil=(0.0, 0.0, 1.0),  # coil_chest offset (dx, dy) and scale
     heldL="none",          # prop in the screen-left hand (costumes.HELD: sword, spear, bow, shield_kite, torch ...)
@@ -220,6 +229,14 @@ DEFAULT_POSE = dict(
     fixL=0.0,              # 0..1: 1 = the left prop keeps the angle rotL in the torso frame (0 forward, -90 up,
     fixR=0.0,              #   90 down) whatever the forearm does; tweens smoothly between the two modes
     crack=0.0,             # 0..1 crack across the forehead (bust rig: the teacher losing patience)
+    specs=0.0,             # glasses (design key glasses): 0 = resting low on the nose, 1 = pushed down to the tip,
+                           #   -1 = pushed up over the eyes
+    sweep=0.0,             # ep02: metal detector (held prop "detector") coil swing, -1..1 (back/forward in 3/4 view,
+                           #   left/right in front view); tweens, so two keys sweep the coil
+    gait="stand",          # horse rig (horse.py): stand / walk / trot / gallop
+    stride=0.0,            # horse rig: gait cycle phase 0..1 (driven by stage walk= / crowd march=)
+    hneck=0.0,             # horse rig: head/neck raise (deg, + = head up, - = head down)
+    hat_off=0.0,           # horse rig rider: >= 0.5 = hat in the near hand (wave hat)
 )
 
 NUMERIC = [k for k, v in DEFAULT_POSE.items() if isinstance(v, (int, float, tuple))]
@@ -252,6 +269,9 @@ def draw_character(pt: Painter, D, p, idle=(0.0, 0.0)):
     if D.get("rig") == "bust":
         import bust
         return bust.draw(pt, D, p, idle)
+    if D.get("rig") == "horse":
+        import horse
+        return horse.draw(pt, D, p, idle)
     fac = p["facing"]
     k = 1 if fac == "r" else 0                      # three-quarter amount
     back = fac == "b"
@@ -446,9 +466,11 @@ def draw_character(pt: Painter, D, p, idle=(0.0, 0.0)):
     if C is not None:
         CO.head_front(C)                            # new hair styles + headwear
     if p["sweat"] > 0.05 and not back:
-        s = p["sweat"]
+        s = min(p["sweat"], 1.0)
         pt.blob(H([(rx * 0.95, -ry * 0.45), (rx * 0.95 + 22 * s, -ry * 0.1), (rx * 0.95, -ry * 0.0 + 10 * s),
                    (rx * 0.95 - 22 * s, -ry * 0.1)]), (235, 190, 120), LINE * 0.7, n=6)
+    if not back:
+        head_marks(pt, H, p, rx, ry, fsx, C)        # extra sweat drops, anger vein (over hats)
 
     # ---------------- chest coil (in front of torso, behind hands)
     if p["prop"] == "coil_chest":
@@ -484,8 +506,210 @@ def coil(pt, c, rx, ry, ang, color, width):
         pt.line([p0 - n * width * 0.45, p0 + n * width * 0.45], LINE * 0.45)
 
 
+# ----------------------------------------------------------------------------------------------- extra expressions
+XEYES = ("side", "roll", "mismatch", "squeeze", "spiral", "stars", "teary")
+STAR = (60, 205, 250)                    # BGR gold (star-struck eyes)
+TEAR = (240, 205, 150)                   # BGR light blue (tears, wet eyes)
+
+
+BRIM_Y = dict(slouch=-50, boonie=-54, cap=-40, tophat=-56, tricorn=-44)   # lowest brim edge over the eyes (units)
+
+
+def _mm_side(lx):
+    """mismatch eyes: which eye is the big one (+1 screen-right, default; look x < 0 -> screen-left)."""
+    return -1 if lx < 0 else 1
+
+
+def _clip_ell(cx, cy, rx, ry, ytop, n=40):
+    """ellipse points below the line y = ytop (a lidded eye: flat top edge)."""
+    q = ellipse_pts(cx, cy, rx, ry, 0, n)
+    q = q[q[:, 1] >= ytop]
+    if len(q) < 3:
+        return ellipse_pts(cx, cy, rx, ry, 0, n)
+    a = np.arctan2(q[:, 1] - cy, q[:, 0] - cx)
+    q = q[np.argsort(a)]
+    return q
+
+
+def _xeye(pt, H, eyes, s, cx, cy, lx, ly):
+    """the exaggerated eye types (s = -1 screen-left eye, +1 screen-right). Returns the eye's y (brows follow)."""
+    if eyes == "side":          # side-eye: lidded white eye, pupil shoved into the corner, heavy flat lid
+        d = 1 if lx >= 0 else -1
+        top = cy - 6
+        pt.shape(H(_clip_ell(cx, cy, 25, 19, top)), WHITE, LINE * 0.7, shade=False)
+        pt.dot(*H([(cx + d * 12, cy + 5)])[0], 10.5)
+        pt.line(H([(cx - 30, top - 1 + 2 * s * d), (cx + 30, top - 1 - 2 * s * d)]), LINE * 1.1)
+    elif eyes == "roll":        # eye-roll: white eye, pupil hanging from the top lid
+        top = cy - 10
+        pt.shape(H(_clip_ell(cx, cy, 24, 20, top)), WHITE, LINE * 0.7, shade=False)
+        pt.shape(H(ellipse_pts(cx + lx * 0.3, top, 11, 11, 0, 16, 0, math.pi)), INK, 0)
+        pt.line(H([(cx - 26, top), (cx + 26, top)]), LINE * 1.0)
+    elif eyes == "mismatch":    # disbelief: one huge white eye with a tiny pupil, the other a small squint
+        if s == _mm_side(lx):
+            cy -= 10
+            pt.ell(*H([(cx + s * 4, cy)])[0], 29, 31, WHITE, LINE * 0.75, shade=False)
+            pt.dot(*H([(cx + s * 4 + lx * 0.3, cy + 2 + ly * 0.3)])[0], 9)
+        else:
+            cy += 4
+            pt.dot(*H([(cx, cy + 3)])[0], 8)
+            pt.line(H([(cx - 20, cy - 6), (cx + 20, cy - 4)]), LINE * 1.0)
+    elif eyes == "squeeze":     # "> <": chevrons pointing at the nose, squeezed shut
+        pt.line(H([(cx + s * 20, cy - 17), (cx - s * 16, cy), (cx + s * 20, cy + 17)]), LINE * 1.15)
+    elif eyes == "spiral":      # dizzy: a spiral per eye, wound opposite ways
+        cy -= 2
+        t = np.linspace(0, 2.15 * 2 * math.pi, 64)
+        r = 2 + 28 * t / t[-1]
+        a = t * s + (0.6 if s > 0 else 2.4)
+        pt.line(H(np.stack([cx + r * np.cos(a), cy + r * np.sin(a)], 1)), LINE * 0.85)
+    elif eyes == "stars":       # star-struck: big gold five-point stars
+        a = -math.pi / 2 + np.arange(10) * math.pi / 5 + s * 0.12
+        rr = np.where(np.arange(10) % 2 == 0, 30, 13)
+        pt.shape(H(np.stack([cx + rr * np.cos(a), cy - 3 + rr * np.sin(a)], 1)), STAR, LINE * 0.7, shade=False)
+    elif eyes == "teary":       # welling up: big wet eye, two highlights, a pool of water on the lower lid
+        cy -= 4
+        pt.ell(*H([(cx, cy)])[0], 24, 26, INK, 0, shade=False)
+        pt.ell(*H([(cx - 8 + lx * 0.2, cy - 9)])[0], 8.5, 9.5, WHITE, 0, shade=False)
+        pt.dot(*H([(cx + 9, cy + 9)])[0], 4.5, WHITE)
+        pt.shape(H(ellipse_pts(cx, cy + 18, 28, 12, 0, 24, 0, math.pi)), TEAR, LINE * 0.55, shade=False)
+    return cy
+
+
+XMOUTHS = ("frown", "twitch", "jawdrop", "teeth", "pout")
+MUS_DROP = dict(walrus=34, droop=30, thin=18, handlebar=12)   # new mouths move down under these moustaches
+
+
+def _xmouth(pt, H, m, mx, my, o, lx, ry=176):
+    """the exaggerated mouth types (o = mopen: jawdrop height, frown depth)."""
+    if m == "frown":            # big wobbly down-curve with little corner hooks
+        w = 44
+        q = [(mx - w, my + 22), (mx - w * 0.62, my + 2), (mx - w * 0.22, my - 6), (mx + w * 0.2, my - 3),
+             (mx + w * 0.6, my + 4), (mx + w, my + 24)]
+        pt.line(H(q), LINE * 1.0, smooth=True)
+    elif m == "twitch":         # flat line, one corner yanked up (look x < 0 flips the side)
+        d = -1 if lx < 0 else 1
+        pt.line(H([(mx - d * 30, my + 6), (mx - d * 4, my + 5), (mx + d * 16, my + 1), (mx + d * 30, my - 14)]),
+                LINE * 0.95, smooth=True)
+        pt.line(H([(mx + d * 40, my - 22), (mx + d * 46, my - 8)]), LINE * 0.5)     # tick: the cheek jumps
+    elif m == "jawdrop":        # long dropped jaw: tall oval with tongue
+        h = min(40 + 30 * o, (ry - 6 - my) / 1.55)          # bottom stays inside the chin
+        pt.shape(H(ellipse_pts(mx, my + h * 0.55, 30, h, 0, 40)), MOUTH, LINE * 0.95)
+        pt.shape(H(ellipse_pts(mx, my + h * 1.15, 19, h * 0.32, 0, 24, 0, math.pi)), TONGUE, 0, shade=False)
+        pt.shape(H(ellipse_pts(mx, my + h * 0.55, 30, h, 0, 40)), None, LINE * 0.95)
+    elif m == "teeth":          # wide grimace: lens-shaped mouth full of teeth, corners pulled down
+        top = [(mx - 52, my + 6), (mx - 26, my - 12), (mx, my - 14), (mx + 26, my - 12), (mx + 52, my + 6)]
+        bot = [(mx + 52, my + 6), (mx + 26, my + 26), (mx, my + 30), (mx - 26, my + 26)]
+        q = crom(top + bot, True, 8)
+        pt.shape(H(q), WHITE, LINE * 0.95, shade=False)
+        pt.line(H(crom([(mx - 50, my + 7), (mx - 20, my + 9), (mx + 20, my + 9), (mx + 50, my + 7)], False, 6)),
+                LINE * 0.55)
+        for x, h1, h2 in ((-34, -8, 22), (-12, -13, 28), (12, -13, 28), (34, -8, 22)):
+            pt.line(H([(mx + x, my + h1), (mx + x, my + h2)]), LINE * 0.5)
+    elif m == "pout":           # small pushed-out lips: rounded bump with a crease
+        pt.blob(H([(mx - 20, my + 8), (mx - 12, my - 6), (mx, my - 2), (mx + 12, my - 6), (mx + 20, my + 8),
+                   (mx, my + 16)]), (110, 110, 200), LINE * 0.85, n=6, shade=False)
+        pt.line(H([(mx - 13, my + 5), (mx, my + 7), (mx + 13, my + 5)]), LINE * 0.5, smooth=True)
+
+
+PALE = (212, 190, 172)                   # BGR blue-grey dread wash
+PALE_LN = (160, 128, 104)                # BGR dread lines
+BLUSH = (150, 140, 245)                  # BGR pink cheeks
+VEIN = (40, 40, 210)                     # BGR red anger cross
+SWEAT = (235, 190, 120)
+
+
+def _mix(a, b, u):
+    u = min(max(u, 0.0), 1.0)
+    return tuple(int(round(x + (y - x) * u)) for x, y in zip(a, b))
+
+
+def _egg(rx, ry, n=72):
+    t = np.linspace(0, 2 * math.pi, n, endpoint=False)
+    return np.stack([rx * np.cos(t) * (1 + 0.06 * np.sin(t)), ry * np.sin(t) - 6 * np.sin(t) ** 2 * (np.sin(t) > 0)], 1)
+
+
+def _brim(p, C):
+    """lowest y (head units) a hat brim covers down to, or None without a brimmed hat."""
+    if C is None:
+        return None
+    lim = BRIM_Y.get(getattr(C, "hw", "none"))
+    return None if lim is None else lim + C.D.get("hat_dy", 0)
+
+
+def _xunder(pt, H, p, fsx, rx, ry, C):
+    """drawn on the bare egg before the eyes: pale wash + dread lines, blush."""
+    pa = float(p.get("pale", 0.0))
+    if pa > 0.02:
+        b = _brim(p, C)
+        top = -ry * 0.82 if b is None else b - 6
+        if C is None:                                       # bust: stop below the fringe curls
+            top = -ry * 0.5
+        cut = 4.0                                           # the wash covers the face down to the eyes
+        q = _egg(rx * 0.965, ry * 0.965, 96)
+        q = q[(q[:, 1] <= cut) & (q[:, 1] >= top)]
+        q = q[np.argsort(np.arctan2(q[:, 1] - (top + cut) / 2, q[:, 0]))]
+        q = np.vstack([q[q[:, 0] > 0], [(rx * 0.9, cut)], [(-rx * 0.9, cut)], q[q[:, 0] <= 0]])
+        q = q[np.argsort(np.arctan2(q[:, 1] - (top + cut) / 2, q[:, 0]))]
+        pt.shape(H(q), _mix(WHITE, PALE, pa), 0, shade=False)
+        bot = top + (cut - 4 - top) * pa
+        for x in (-0.66, -0.4, -0.14, 0.12, 0.38, 0.64):     # vertical dread lines (eyes and brows draw on top)
+            xx = fsx * 0.6 + x * rx
+            lim = math.sqrt(max(0.0, 1 - (xx / (rx * 0.95)) ** 2)) * ry * 0.95   # stay inside the egg
+            t0 = max(top + 4, -lim + 10)
+            if bot > t0 + 6:
+                pt.line(H([(xx, t0), (xx, bot)]), LINE * 0.6, _mix(WHITE, PALE_LN, pa))
+    bl = float(p.get("blush", 0.0))
+    if bl > 0.02:
+        for s in (-1, 1):
+            cx = fsx + s * 58 * (0.86 if (fsx and s < 0) else 1.0)
+            pt.ell(*H([(cx, 52)])[0], 30 * (0.6 + 0.4 * bl), 15 * (0.6 + 0.4 * bl), _mix(WHITE, BLUSH, bl), 0,
+                   shade=False)
+            for d in (-12, 0, 12):                           # three hatch ticks
+                pt.line(H([(cx + d - 5, 59), (cx + d + 5, 45)]), LINE * 0.35, _mix(WHITE, (90, 80, 200), bl))
+
+
+def _xmarks(pt, H, p, fsx, rx, ry):
+    """drawn over the finished face (after the moustache): tear streams."""
+    te = float(p.get("tears", 0.0))
+    if te > 0.02:
+        for s in (-1, 1):
+            cx = fsx + s * 46 * (0.82 if (fsx and s < 0) else 1.0)
+            y0, y1 = 30, 30 + (ry * 0.95 - 30) * te
+            path = [(cx + s * 6, y0), (cx + s * 14, y0 + (y1 - y0) * 0.35), (cx + s * 8, y0 + (y1 - y0) * 0.7),
+                    (cx + s * 16, y1)]
+            pt.stroke(H(path), TEAR, 10 + 8 * te, LINE * 0.5, smooth=True, shade=False)
+            if te > 0.6:                                     # a drop falling off the chin line
+                pt.blob(H([(cx + s * 16, y1 + 14), (cx + s * 25, y1 + 34), (cx + s * 16, y1 + 44),
+                           (cx + s * 7, y1 + 34)]), TEAR, LINE * 0.5, n=5, shade=False)
+
+
+def head_marks(pt, H, p, rx, ry, fsx, C=None):
+    """drawn after hair and hats (toon.draw_character and bust.draw): extra sweat drops (sweat > 1), anger vein."""
+    sw = float(p.get("sweat", 0.0))
+    for side, y, u in ((-1, -ry * 0.18, sw - 1.0), (1, ry * 0.2, sw - 2.0)):
+        u = min(u, 1.0)
+        if u > 0.05:
+            x = side * rx * 0.98
+            pt.blob(H([(x, y - 30 * u), (x + 20 * u, y + 2), (x, y + 12 * u), (x - 20 * u, y + 2)]), SWEAT,
+                    LINE * 0.7, n=6)
+    v = float(p.get("vein", 0.0))
+    if v > 0.02:
+        side = -1 if fsx > 0 else 1                         # the temple away from the facing direction... front: right
+        if fsx == 0:
+            side = 1
+        b = _brim(p, C)
+        cy = -ry * 0.5 if b is None else max(-ry * 0.5, b + 34)
+        cx = side * rx * 0.62 + fsx * 0.5
+        r = 30 * (0.5 + 0.5 * v)
+        for a in range(4):                                  # four bulging arcs around a gap (the manga anger cross)
+            ang = a * math.pi / 2 + math.pi / 4
+            c = (cx + math.cos(ang) * r * 0.75, cy + math.sin(ang) * r * 0.75)
+            q = ellipse_pts(c[0], c[1], r * 0.62, r * 0.62, 0, 12, ang + math.pi * 0.62, ang + math.pi * 1.38)
+            pt.stroke(H(q), VEIN, 7 + 5 * v, LINE * 0.45, smooth=False, shade=False)
+
+
 def face(pt, H, p, fsx, rx, ry, C=None):
     """eyes, brows, mouth. C: costume context (beard drawn before the mouth, moustache after, lashes)."""
+    _xunder(pt, H, p, fsx, rx, ry, C)
     lx, ly = p["look"]
     ex, ey = 46, 10
     br_t, br_up = p["brows"]
@@ -503,13 +727,26 @@ def face(pt, H, p, fsx, rx, ry, C=None):
             pt.line(H([(cx - 18, cy + 6), (cx, cy - 10), (cx + 18, cy + 6)]), LINE * 0.9, smooth=True)
         elif eyes == "squint":
             pt.line(H([(cx - 18 * s, cy - 10), (cx + 14 * s, cy), (cx - 18 * s, cy + 10)]), LINE * 0.9)
+        elif eyes in XEYES:
+            cy = _xeye(pt, H, eyes, s, cx, cy, lx, ly)
         # brows: inner end at the face centre side
         by = cy - 44 - br_up
         tn = math.tan(math.radians(br_t))
+        if eyes == "mismatch":          # big eye: brow shoots up; small eye: brow pressed down and angled
+            big = s == _mm_side(lx)
+            by += -22 if big else 10
+            tn = math.tan(math.radians(br_t + (12 if big else -22)))
         inner = (cx - s * 20, by - tn * 20)
         outer = (cx + s * 26, by + tn * 26 + 4)
         mid = ((inner[0] + outer[0]) / 2, (inner[1] + outer[1]) / 2 - 5)
-        pt.line(H([inner, mid, outer]), LINE * 1.15, smooth=True)
+        bw = C.D.get("brow_w", 1.0) if C is not None else 1.0       # brow thickness (bushy old brows ~1.7)
+        if eyes in XEYES and C is not None:   # new expressions: keep the brows below a hat brim (visible)
+            lim = BRIM_Y.get(getattr(C, "hw", "none"))
+            if lim is not None:
+                top = min(inner[1], mid[1], outer[1]) - LINE * 0.6 * bw
+                dy = max(0.0, lim + C.D.get("hat_dy", 0) + 6 - top)
+                inner, mid, outer = [(x, y + dy) for x, y in (inner, mid, outer)]
+        pt.line(H([inner, mid, outer]), LINE * 1.15 * bw, smooth=True)
         if C is not None and C.D.get("lashes") and eyes in ("dot", "wide", "up", "half"):
             ox = cx + s * 17
             pt.line(H([(ox, cy - 6), (ox + s * 16, cy - 18)]), LINE * 0.6)
@@ -541,8 +778,13 @@ def face(pt, H, p, fsx, rx, ry, C=None):
     elif m == "gulp":
         pt.line(H([(mx - 26, my + 4), (mx - 13, my - 4), (mx, my + 4), (mx + 13, my - 4), (mx + 26, my + 4)]),
                 LINE * 0.85, smooth=True)
+    elif m in XMOUTHS:   # under a moustache (drawn after the mouth) the new mouths sit lower so they still read
+        mus = C.D.get("moustache", "none") if C is not None else "none"
+        _xmouth(pt, H, m, mx, my + (0 if m == "jawdrop" else MUS_DROP.get(mus, 0)), o, p["look"][0], ry)
     if C is not None:
         C.moustache()
+        C.glasses()
+    _xmarks(pt, H, p, fsx, rx, ry)
 
 
 def pt_scale(pt, H):
@@ -592,11 +834,14 @@ BOX_PROPS = (-1320, -2150, 1320, 170)       # long props (spears, banners, longb
 
 
 BOX_BUST = (-430, -1330, 430, 40)          # bust.py rig with its plinth
+BOX_HORSE = (-1050, -2450, 1150, 150)      # horse.py rig: horse + rider (raised sword / hat)
 
 
 def char_box(D, p):
     if D.get("rig") == "bust":
         return BOX_BUST
+    if D.get("rig") == "horse":
+        return BOX_HORSE
     if not uses_costumes(D, p):
         return BOX
     return BOX_PROPS if (p.get("heldL", "none") != "none" or p.get("heldR", "none") != "none") else BOX_COSTUME
