@@ -19,6 +19,7 @@ questions, and short story films.
 | `scripts/bust.py` | Talking marble bust on a plinth (F in History's teacher), drawn as a toon layer |
 | `scripts/scenery.py`, `scenery_kits.py`, `overlays.py` | Code-drawn parallax sets, real-coastline maps, explainer overlays |
 | `scripts/engine.py`, `stage.py`, `timing.py`, `render_all.py` | Shot engine, word-timed cuts, parallel segment rendering |
+| `scripts/threejs/` | three.js / headless-Chrome renderer: JS port of the painter, 2D stage, real-3D shots, one-take camera ([references/threejs.md](references/threejs.md)) |
 | `scripts/narrate.py` | Script -> chapters -> Gemini TTS -> `assets/audio/narration.wav` |
 | `scripts/words.py` | Word timestamps with mlx-whisper |
 | `scripts/new_project.py` | Creates a project from `assets/templates/` |

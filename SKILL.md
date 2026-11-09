@@ -92,6 +92,16 @@ reference fixes this with the tools below; use them in every segment (API in [re
 - Mood follows the emotion, not just the time of day: `S.mood("spotlight" | "rays" | "dim")`, `shake` on impacts.
 - Riders: `horse.py` (`HO.mounted(rider, HO.BAY)`, gaits walk / trot / gallop through `walk=` or crowd `march=`).
 
+## three.js renderer: faster, real 3D camera, one take (added 2026-11-10)
+
+The same segments can be rendered on the GPU in headless Chrome: `$PY $K/threejs/setup_threejs.py <project>`, then
+`threejs/export_stage.py` + `node threejs/stage.mjs ...`. 15 s in ~80 s (2D stage, same look as Python) or ~110 s
+(one-take 3D), vs ~3.3 min in Python. Characters are drawn by a verified JS port of the painter. For real 3D shots
+or a one-take version the camera follows the user's rule: calm move-and-hold, one stop per narration line, readable
+text, flat v3 look (no cinematic grade / glow / rays / rim / long shadows). Everything else - setup, modes, direction
+rules, gotchas: [references/threejs.md](references/threejs.md). A painter change in Python must be ported to its
+`threejs/toonjs/` file too (then run its tests).
+
 ## Performance (measured 2026-11-07 on a fanless MacBook Air, 10 cores)
 
 - One process: 7-15 s of render per second of film (12.6 s clip: 90 s cold; 100 s+ once the Air is hot and
