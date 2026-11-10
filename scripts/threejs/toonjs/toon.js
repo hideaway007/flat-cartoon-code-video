@@ -210,7 +210,6 @@ export function draw_character(pt, D, p, idle = [0.0, 0.0]) {
     pt.blob(H([[rx * 0.95, -ry * 0.45], [rx * 0.95 + 22 * s, -ry * 0.1], [rx * 0.95, -ry * 0.0 + 10 * s],
       [rx * 0.95 - 22 * s, -ry * 0.1]]), [235, 190, 120], LINE * 0.7, 6);
   }
-  if (!back) head_marks(pt, H, p, rx, ry, fsx, C);
   if (p.prop === 'coil_chest') {
     const [dx, dy, sc] = p.coil, c = up([10 * k + dx, -T * 0.42 + dy]);
     coil(pt, c, 104 * sc, 120 * sc, 0.25, D.rope, 58 * sc);
@@ -409,7 +408,6 @@ export function head_marks(pt, H, p, rx, ry, fsx, C = null) {
 }
 
 export function face(pt, H, p, fsx, rx, ry, C = null) {
-  _xunder(pt, H, p, fsx, rx, ry, C);
   const [lx, ly] = p.look, ex = 46, ey = 10, [br_t, br_up] = p.brows, eyes = p.eyes;
   for (const s of [-1, 1]) {
     const cx = fsx + s * ex * (fsx && s < 0 ? 0.82 : 1.0);
@@ -424,7 +422,7 @@ export function face(pt, H, p, fsx, rx, ry, C = null) {
       pt.line(H([[cx - 18, cy + 6], [cx, cy - 10], [cx + 18, cy + 6]]), LINE * 0.9, undefined, true);
     } else if (eyes === 'squint') {
       pt.line(H([[cx - 18 * s, cy - 10], [cx + 14 * s, cy], [cx - 18 * s, cy + 10]]), LINE * 0.9);
-    } else if (XEYES.includes(eyes)) cy = _xeye(pt, H, eyes, s, cx, cy, lx, ly);
+    }
     let by = cy - 44 - br_up, tn = Math.tan(radians(br_t));
     if (eyes === 'mismatch') {
       const big = s === _mm_side(lx);
@@ -469,12 +467,8 @@ export function face(pt, H, p, fsx, rx, ry, C = null) {
     for (const x of [-20, 0, 20]) pt.line(H([[mx + x, my - 12], [mx + x, my + 18]]), LINE * 0.6);
   } else if (m === 'gulp') {
     pt.line(H([[mx - 26, my + 4], [mx - 13, my - 4], [mx, my + 4], [mx + 13, my - 4], [mx + 26, my + 4]]), LINE * 0.85, undefined, true);
-  } else if (XMOUTHS.includes(m)) {
-    const mus = C != null ? get(C.D, 'moustache', 'none') : 'none';
-    _xmouth(pt, H, m, mx, my + (m === 'jawdrop' ? 0 : get(MUS_DROP, mus, 0)), o, p.look[0], ry);
   }
   if (C != null) { C.moustache(); C.glasses(); }
-  _xmarks(pt, H, p, fsx, rx, ry);
 }
 export function pt_scale(pt, H) { return 1.0; }
 

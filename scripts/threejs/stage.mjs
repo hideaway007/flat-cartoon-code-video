@@ -47,7 +47,7 @@ const until = (job, n) => new Promise((r) => { const c = () => (job.n >= n ? r()
 const T0 = Date.now();
 async function openPage() {
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: true,
-    args: ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--window-size=1920,1080'] });
+    args: ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-gpu-vsync', '--disable-frame-rate-limit', '--window-size=1920,1080'] });
   const page = await browser.newPage();
   page.on('console', (m) => { if (['error', 'warning'].includes(m.type()) && !m.text().includes('404')) console.log('[page]', m.text()); });
   page.on('pageerror', (e) => console.log('[page error]', e.message));
@@ -76,15 +76,16 @@ const results = await Promise.all(Array.from({ length: JOBS }, async (_, j) => {
   const a = j * per, b = Math.min(NF, a + per);
   if (a >= b) return null;
   const chunk = path.join(tmp, `c${j}.mp4`);
-  const ff = spawn('ffmpeg', ['-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', '1920x1080', '-r', String(info0.fps), '-i', '-',
-    '-vf', 'vflip', '-c:v', 'libx264', '-preset', 'medium', '-crf', '17', '-pix_fmt', 'yuv420p', chunk], { stdio: ['pipe', 'inherit', 'inherit'] });
+  const ff = spawn('ffmpeg', ['-nostdin', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', '1920x1080', '-r', String(info0.fps), '-i', '-',
+    '-vf', 'vflip', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '17', '-pix_fmt', 'yuv420p', chunk], { stdio: ['pipe', 'inherit', 'inherit'] });
   const job = { ff, n: 0, waiters: [] }; sinks.set(j, job);
   const { browser, page } = await openPage();
   const ready = Date.now();
   await page.evaluate((port, j) => new Promise((ok) => { window.frameSocket = new WebSocket(`ws://localhost:${port}/?job=${j}`); window.frameSocket.binaryType = 'arraybuffer'; window.frameSocket.onopen = ok; }), port, j);
-  for (let k = a; k < b; k++) {
-    await page.evaluate((k) => window.renderFrameAt(k, 'raw'), k);
-    if (k - a - job.n > 4) await until(job, k - a - 4);
+  for (let k = a; k < b; k += 4) {
+    const end = Math.min(b, k + 4);
+    await page.evaluate((s, e) => { for (let i = s; i < e; i++) window.renderFrameAt(i, 'raw'); }, k, end);
+    if (end - a - job.n > 6) await until(job, end - a - 6);
   }
   await until(job, b - a);
   const charMs = await page.evaluate(() => window.charMsTotal());
@@ -96,7 +97,7 @@ const results = await Promise.all(Array.from({ length: JOBS }, async (_, j) => {
 const list = path.join(tmp, 'list.txt');
 fs.writeFileSync(list, results.filter(Boolean).map((c) => `file '${c}'`).join('\n'));
 const wav = path.join(HERE, dataRel.replace(/\.json$/, '.wav'));
-spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-i', wav, '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', OUT], { stdio: 'inherit' });
+spawnSync('ffmpeg', ['-nostdin', '-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-i', wav, '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', OUT], { stdio: 'inherit' });
 const secs = (Date.now() - t1) / 1000;
 console.log(`${OUT}\n${NF} frames, ${JOBS} jobs: render ${secs.toFixed(1)} s (${(secs / NF * 1000).toFixed(0)} ms/frame), total incl. startup ${((Date.now() - T0) / 1000).toFixed(1)} s`);
 server.close(); process.exit(0);

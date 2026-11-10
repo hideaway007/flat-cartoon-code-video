@@ -411,6 +411,80 @@ export function prop(C, kind, side) {
     pt.shape([_add(o, [28, -46]), _add(o, [50, -24]), _add(o, [36, -22])], WHITE, _mul(LINE, 0.5), undefined, false);
     tip = o;
   }
+  else if (_truth(((kind === "carbine")))) {
+    pt.shape(R([[-220, -18], [-40, -16], [-20, 26], [-220, 46]]), WOOD, _mul(LINE, 0.85));
+    pt.shape(R(_rect(-40, 90, 32)), IRON, _mul(LINE, 0.8));
+    pt.shape(R([[10, -16], [76, -42], [82, -26], [16, -4]]), STEEL, _mul(LINE, 0.7));
+    pt.stroke(R([[86, -6], [440, -6]]), IRON, 20, _mul(LINE, 0.8));
+    pt.shape(R(_rect(86, 290, 28)), WOOD, _mul(LINE, 0.75));
+    pt.shape(R(_rect(190, 206, 32)), STEEL, _mul(LINE, 0.6));
+    tip = _item(R([[440, -6]]), 0);
+  }
+  else if (_truth(((kind === "winchester")))) {
+    pt.shape(R([[-230, -18], [-50, -16], [-30, 26], [-230, 48]]), WOOD, _mul(LINE, 0.85));
+    pt.shape(R(_rect(-50, 96, 36)), GOLD, _mul(LINE, 0.85));
+    pt.stroke(R([[-10, 18], [44, 58], [82, 42], [36, 14]]), IRON, 12, _mul(LINE, 0.65));
+    pt.stroke(R([[96, -9], [470, -9]]), IRON, 18, _mul(LINE, 0.75));
+    pt.stroke(R([[96, 9], [464, 9]]), GOLD_DK, 15, _mul(LINE, 0.7));
+    pt.shape(R(_rect(240, 256, 34)), GOLD, _mul(LINE, 0.6));
+    tip = _item(R([[470, -9]]), 0);
+  }
+  else if (_truth(((kind === "binoculars")))) {
+    pt.shape(R(_rect(-24, 130, 56)), BLACK, _mul(LINE, 0.85));
+    pt.shape(R([[-24, -34], [136, -46], [136, 46], [-24, 34]]), BLACK, _mul(LINE, 0.85));
+    pt.shape(R(_rect(-34, -18, 52)), GOLD, _mul(LINE, 0.7));
+    pt.shape(R(_rect(120, 142, 92)), GOLD, _mul(LINE, 0.75));
+    pt.ell(..._item(R([[142, 0]]), 0), 14, 38, [220, 200, 140], _mul(LINE, 0.6), undefined, false);
+    tip = _item(R([[142, 0]]), 0);
+  }
+  else if (_truth(((kind === "pickaxe")))) {
+    pt.stroke(R([[-110, 0], [340, 0]]), WOOD, 26, _mul(LINE, 0.8));
+    pt.shape(R([[270, -160], [310, -24], [330, 0], [310, 24], [270, 160], [294, 0]]), IRON, _mul(LINE, 0.9));
+    tip = _item(R([[270, -160]]), 0);
+  }
+  else if (_truth(((kind === "gold_pan")))) {
+    u_ = _n(_sub(_item(R([[1, 0]]), 0), c));
+    r_ = _neg(_perp(u_));
+    o = _add(_add(c, _mul(r_, 90)), _mul(u_, 20));
+    P_ = (x, y) => _add(_add(o, _mul(r_, x)), _mul(u_, y));
+    pt.shape([P_(-130, 20), P_(130, 20), P_(96, -38), P_(-96, -38)], IRON, _mul(LINE, 0.85));
+    pt.ell(_item(o, 0), _add(_item(o, 1), 20), 130, 32, STEEL_DK, _mul(LINE, 0.8));
+    for (const [dx, dy, rad] of [[-45, 18, 16], [10, 24, 20], [55, 16, 15], [-15, 10, 14]]) {
+      const gp = _add(_add(o, _mul(r_, dx)), _mul(u_, dy));
+      pt.ell(_item(gp, 0), _item(gp, 1), rad, rad * 0.75, GOLD, _mul(LINE, 0.6));
+    }
+    tip = o;
+  }
+  else if (_truth(((kind === "telegraph")))) {
+    u_ = _n(_sub(_item(R([[1, 0]]), 0), c));
+    r_ = _neg(_perp(u_));
+    o = _add(c, _mul(u_, 95));
+    P_ = (x, y) => _add(_add(o, _mul(r_, x)), _mul(u_, y));
+    pt.shape([P_(-95, -110), P_(95, -110), P_(95, 110), P_(-95, 110)], [140, 224, 248], _mul(LINE, 0.8));
+    pt.shape([P_(-95, 76), P_(95, 76), P_(95, 110), P_(-95, 110)], RED, _mul(LINE, 0.6), undefined, false);
+    for (v of [40, 10, -20, -50, -80]) {
+      pt.line([P_(-70, v), P_(70, v)], _mul(LINE, 0.4), INK);
+    }
+    tip = o;
+  }
+  else if (_truth(((kind === "hardtack")))) {
+    u_ = _n(_sub(_item(R([[1, 0]]), 0), c));
+    r_ = _neg(_perp(u_));
+    o = _add(c, _mul(u_, 70));
+    P_ = (x, y) => _add(_add(o, _mul(r_, x)), _mul(u_, y));
+    pt.shape([P_(-125, -85), P_(125, -85), P_(125, 85), P_(-125, 85)], WOOD, _mul(LINE, 0.85));
+    for (v of [-30, 30]) {
+      pt.line([P_(-122, v), P_(122, v)], _mul(LINE, 0.5), WOOD_DK);
+    }
+    pt.shape([P_(-125, -85), P_(-98, -85), P_(-98, 85), P_(-125, 85)], WOOD_DK, _mul(LINE, 0.6), undefined, false);
+    pt.shape([P_(98, -85), P_(125, -85), P_(125, 85), P_(98, 85)], WOOD_DK, _mul(LINE, 0.6), undefined, false);
+    tip = o;
+  }
+  else if (_truth(((kind === "pocketknife")))) {
+    pt.shape(R(_rect(-45, 55, 26)), WOOD_DK, _mul(LINE, 0.75));
+    pt.shape(R([[55, -11], [155, -9], [185, 4], [145, 13], [55, 11]]), STEEL, _mul(LINE, 0.75));
+    tip = _item(R([[185, 4]]), 0);
+  }
   if (_truth(((tip !== null)))) {
     C.joints[_add("tip", tag)] = tip;
     C.joints[_add("grip", tag)] = c;

@@ -62,17 +62,22 @@ const PREMUL = { transparent: true, depthTest: false, depthWrite: false, side: T
 // downsample (toons), gaussian DOF blur (sigma in local px), haze, tint, opacity
 function spriteMat() {
   return new THREE.ShaderMaterial({ ...PREMUL,
-    uniforms: { map: { value: null }, rect: { value: new THREE.Vector4(0, 0, 1, 1) }, pad: { value: new THREE.Vector2() },
+    uniforms: { map: { value: null }, map2: { value: null }, mixW: { value: 0 }, rect: { value: new THREE.Vector4(0, 0, 1, 1) }, pad: { value: new THREE.Vector2() },
       px: { value: new THREE.Vector2(1, 1) }, texel: { value: new THREE.Vector2() }, mode: { value: 0 }, sigma: { value: 0 },
       haze: { value: 0 }, hazeCol: { value: new THREE.Vector3() }, tint: { value: new THREE.Vector3(1, 1, 1) }, opacity: { value: 1 },
       rimDir: { value: new THREE.Vector2() }, rimAmt: { value: 0 }, rimCol: { value: new THREE.Vector3(1, 0.8, 0.5) },
       desat: { value: 0 } },
     vertexShader: VS, fragmentShader: `
-    uniform sampler2D map; uniform vec4 rect; uniform vec2 pad, px, texel; uniform int mode; uniform float sigma, haze, opacity;
+    uniform sampler2D map, map2; uniform float mixW; uniform vec4 rect; uniform vec2 pad, px, texel; uniform int mode; uniform float sigma, haze, opacity;
     uniform vec3 hazeCol, tint, rimCol; uniform vec2 rimDir; uniform float rimAmt, desat; varying vec2 vUv;
     // NOTE: sample unconditionally and mask: a texture fetch inside a divergent branch gets a garbage mip level at
     // the card edges (thin dark frames around cards seen at an angle)
     float inside(vec2 l){ return step(0.0, l.x) * step(0.0, l.y) * step(l.x, 1.0) * step(l.y, 1.0); }
+    vec4 samp(vec2 uv){
+      vec4 c = texture2D(map, uv);
+      if (mixW > 0.001) c = mix(c, texture2D(map2, uv), mixW);
+      return c;
+    }
     vec4 at(vec2 l){                              // l: local 0..1 inside the image
       vec2 uv = mix(rect.xy, rect.zw, clamp(l, 0.0, 1.0));
       if (mode == 1) {                            // INTER_AREA 3x3 of the SS texture at this output pixel
@@ -80,7 +85,7 @@ function spriteMat() {
         for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) s += textureLod(map, uv + vec2(float(i), float(j)) * texel, 0.0);
         return s / 9.0 * inside(l);
       }
-      return texture2D(map, uv) * inside(l);
+      return samp(uv) * inside(l);
     }
     void main(){
       vec2 l = vUv * (1.0 + 2.0 * pad) - pad;
@@ -92,7 +97,7 @@ function spriteMat() {
           float r = sqrt((float(i) + 0.5) / 48.0) * 2.6 * sigma, th = float(i) * 2.3999632;
           float w = exp(-0.5 * r * r / (sigma * sigma));
           vec2 lb = l + r * vec2(cos(th), sin(th)) / px;
-          c += w * texture2D(map, mix(rect.xy, rect.zw, clamp(lb, 0.0, 1.0))) * inside(lb);   // mip-filtered when blurred
+          c += w * samp(mix(rect.xy, rect.zw, clamp(lb, 0.0, 1.0))) * inside(lb);   // mip-filtered when blurred
           wsum += w;
         }
         c /= wsum;
@@ -151,7 +156,13 @@ const silCol = new THREE.ShaderMaterial({ uniforms: { src: { value: null }, rows
     gl_FragColor = vec4(c.rgb * c.a + ink * (1.0 - c.a) * dil, c.a + (1.0 - c.a) * dil);   // premultiplied
   }` });
 const quadScene = new THREE.Scene(); const quad = new THREE.Mesh(quadGeo); quadScene.add(quad);
-function pass(mat, target) { quad.material = mat; renderer.setRenderTarget(target); renderer.render(quadScene, quadCam); }
+function pass(mat, target, scBox = null) {
+  quad.material = mat;
+  renderer.setRenderTarget(target);
+  if (scBox) { target.scissor.set(...scBox); target.scissorTest = true; }
+  renderer.render(quadScene, quadCam);
+  if (scBox) { target.scissorTest = false; }
+}
 
 // ------------------------------------------------------------------------------------------------ textures
 const loader = new THREE.TextureLoader();
@@ -167,6 +178,21 @@ const T = {};
 await Promise.all(DATA.shots.flatMap((s) => s.layers.flatMap((L) =>
   L.kind === 'plate' ? [L.src] : L.kind === 'char' ? [L.src, ...(L.swaps || []).map((x) => x[1])] : []))
   .filter((v, i, a) => a.indexOf(v) === i).map(async (src) => { T[src] = await tex(src); }));
+
+const sharedCv = document.createElement('canvas'); sharedCv.width = sharedCv.height = 16;
+let sharedTx = null, sharedRows = null;
+function growShared(w, h) {
+  if (sharedCv.width < w || sharedCv.height < h || !sharedTx) {
+    sharedCv.width = Math.max(sharedCv.width, Math.ceil(w / 256) * 256);
+    sharedCv.height = Math.max(sharedCv.height, Math.ceil(h / 256) * 256);
+    if (sharedTx) sharedTx.dispose();
+    if (sharedRows) sharedRows.dispose();
+    sharedTx = new THREE.CanvasTexture(sharedCv); sharedTx.colorSpace = THREE.NoColorSpace;
+    sharedTx.generateMipmaps = false; sharedTx.minFilter = sharedTx.magFilter = THREE.NearestFilter;
+    sharedRows = makeRT(sharedCv.width, sharedCv.height);
+  }
+  return sharedCv;
+}
 
 // ------------------------------------------------------------------------------------------------ shot scenes
 function buildShot(sh) {
@@ -190,21 +216,18 @@ function buildShot(sh) {
     }
     hud = null;
     if (L.kind === 'plate' || L.kind === 'char') {
-      L._meshes = (L.kind === 'char' ? [0, 1] : [0]).map(() => add(new THREE.Mesh(unit, spriteMat())));
+      L._meshes = [add(new THREE.Mesh(unit, spriteMat()))];
     } else if (L.kind === 'toon') {
       if (L.shadow !== false) L._shadow = add(new THREE.Mesh(unit, shadowMat()));
       L._mesh = add(new THREE.Mesh(unit, spriteMat()));
       L._mesh.material.uniforms.mode.value = 1;
-      L._cv = document.createElement('canvas'); L._cv.width = L._cv.height = 16;
-      L._grow = (w, h) => {                                  // grow-only SS canvas + its GPU buffers
-        if (L._cv.width < w || L._cv.height < h || !L._tx) {
-          L._cv.width = Math.max(L._cv.width, Math.ceil(w / 256) * 256); L._cv.height = Math.max(L._cv.height, Math.ceil(h / 256) * 256);
-          for (const o of [L._tx, L._rows, L._sil]) o && o.dispose();
-          L._tx = new THREE.CanvasTexture(L._cv); L._tx.colorSpace = THREE.NoColorSpace;
-          L._tx.generateMipmaps = false; L._tx.minFilter = L._tx.magFilter = THREE.NearestFilter;
-          L._rows = makeRT(L._cv.width, L._cv.height); L._sil = makeRT(L._cv.width, L._cv.height, { mips: true });
+      L._grow = (w, h) => {
+        const cv = growShared(w, h);
+        if (!L._sil || L._sil.width < cv.width || L._sil.height < cv.height) {
+          if (L._sil) L._sil.dispose();
+          L._sil = makeRT(cv.width, cv.height, { mips: !!(L.blur && L.blur > 0.3) });
         }
-        return L._cv;
+        return cv;
       };
       L.D = L.D; L.phase = L.phase || 0;
     }
@@ -221,29 +244,30 @@ function drawPlate(L, cam, tn, shk) {
   A[0][2] += shk[0] * d; A[1][2] += shk[1] * d;
   setAffine(m, compose(A, imgToUnit(w, h)));
   const u = m.material.uniforms; u.map.value = t; u.tint.value.copy(bgr(L.tint));
-  if (L.blur) { const k = Math.trunc(L.blur) * 2 + 1; u.sigma.value = 0.3 * ((k - 1) * 0.5 - 1) + 0.8; u.px.value.set(w * cover, h * cover); }
+  if (L.blur) { const k = Math.trunc(L.blur) * 2 + 1; u.sigma.value = 0.3 * ((k - 1) * 0.5 - 1) + 0.8; u.px.value.set(w * cover, h * cover); } else { u.sigma.value = 0; }
 }
 
 function drawChar(L, cam, tn, t, shk) {
   const entries = [[0.0, L.src, {}], ...(L.swaps || []).map((s) => [s[0], s[1], s[2] || {}])];
   let k = 0; entries.forEach((e, i) => { if (t >= e[0]) k = i; });
   const swaps = entries.slice(1).map((e) => [e[0], e[2]]);
-  let poses = [[entries[k][1], 1.0]];
+  let srcA = entries[k][1], srcB = null, mixW = 0.0;
   const xf = k > 0 ? (entries[k][2].xf ?? 0.05) : 0;
-  if (k > 0 && t - entries[k][0] < xf) { const w = (t - entries[k][0]) / xf; poses = [[entries[k - 1][1], 1 - w], [entries[k][1], w]]; }
+  if (k > 0 && xf > 0 && t - entries[k][0] < xf) {
+    mixW = (t - entries[k][0]) / xf;
+    srcA = entries[k - 1][1];
+    srcB = entries[k][1];
+  }
   const [mdx, mdy, msc, rot] = AN.motion_offset(L.motions || [], t, swaps);
-  L._meshes.forEach((m, i) => {
-    const pz = poses[i]; m.visible = !!pz;
-    if (!pz) return;
-    const tx = T[pz[0]], s = L.scale * msc, fl = L.flip ? -1 : 1, c = Math.cos(rot), sn = Math.sin(rot);
-    const M = [[c * s * fl, -sn * s], [sn * s * fl, c * s]];
-    const anc = L.anchor_src;
-    const tr = [L.pos[0] + mdx - (M[0][0] * anc[0] + M[0][1] * anc[1]), L.pos[1] + mdy - (M[1][0] * anc[0] + M[1][1] * anc[1])];
-    const d = L.depth ?? 1.0, A = compose(AN.cam_affine(cam, d, tn, W, H), [[M[0][0], M[0][1], tr[0]], [M[1][0], M[1][1], tr[1]]]);
-    A[0][2] += shk[0] * d; A[1][2] += shk[1] * d;
-    setAffine(m, compose(A, imgToUnit(tx.image.width, tx.image.height)));
-    const u = m.material.uniforms; u.map.value = tx; u.opacity.value = pz[1]; u.tint.value.copy(bgr(L.tint));
-  });
+  const m = L._meshes[0]; m.visible = true;
+  const tx = T[srcA], tx2 = srcB ? T[srcB] : tx, s = L.scale * msc, fl = L.flip ? -1 : 1, c = Math.cos(rot), sn = Math.sin(rot);
+  const M = [[c * s * fl, -sn * s], [sn * s * fl, c * s]];
+  const anc = L.anchor_src;
+  const tr = [L.pos[0] + mdx - (M[0][0] * anc[0] + M[0][1] * anc[1]), L.pos[1] + mdy - (M[1][0] * anc[0] + M[1][1] * anc[1])];
+  const d = L.depth ?? 1.0, A = compose(AN.cam_affine(cam, d, tn, W, H), [[M[0][0], M[0][1], tr[0]], [M[1][0], M[1][1], tr[1]]]);
+  A[0][2] += shk[0] * d; A[1][2] += shk[1] * d;
+  setAffine(m, compose(A, imgToUnit(tx.image.width, tx.image.height)));
+  const u = m.material.uniforms; u.map.value = tx; u.map2.value = tx2; u.mixW.value = mixW; u.opacity.value = 1.0; u.tint.value.copy(bgr(L.tint));
 }
 
 let charMs = 0;
@@ -267,15 +291,16 @@ function drawToon(L, cam, tn, t, shk) {
   const r2 = R.renderChar(L.D, p, A, { flip: !!L.flip, idle: AN.idle_at(L, t), clip: [W, H], raw: true, sil: false, canvas: L._grow });
   const m = L._mesh; m.visible = !!r2;
   if (!r2) return;
-  const cv = L._cv, CW = cv.width, CH = cv.height;
-  L._tx.needsUpdate = true;
+  const CW = sharedCv.width, CH = sharedCv.height;
+  sharedTx.needsUpdate = true;
   // outer contour on the GPU (k = Python pt.lw(LINE * 0.55) at SS)
   const k = Math.max(1, Math.round(11.0 * 0.55 * sc * SS));
-  silRow.uniforms.src.value = L._tx; silRow.uniforms.texel.value.set(1 / CW, 1 / CH); silRow.uniforms.k.value = k;
-  pass(silRow, L._rows);
-  silCol.uniforms.src.value = L._tx; silCol.uniforms.rows.value = L._rows.texture; silCol.uniforms.texel.value.set(1 / CW, 1 / CH);
+  const scBox = [0, Math.max(0, CH - r2.h - k - 4), Math.min(CW, r2.w + k + 4), Math.min(CH, r2.h + k + 4)];
+  silRow.uniforms.src.value = sharedTx; silRow.uniforms.texel.value.set(1 / CW, 1 / CH); silRow.uniforms.k.value = k;
+  pass(silRow, sharedRows, scBox);
+  silCol.uniforms.src.value = sharedTx; silCol.uniforms.rows.value = sharedRows.texture; silCol.uniforms.texel.value.set(1 / CW, 1 / CH);
   silCol.uniforms.k.value = k;
-  pass(silCol, L._sil);
+  pass(silCol, L._sil, scBox);
   const sw = r2.x1 - r2.x0, shh = r2.y1 - r2.y0, blur = +(L.blur || 0), pad = blur > 0.3 ? Math.ceil(blur * 3) : 0;
   setAffine(m, [[sw + 2 * pad, 0, r2.x0 - pad], [0, -(shh + 2 * pad), r2.y0 + shh + pad]]);
   const u = m.material.uniforms;
@@ -338,34 +363,45 @@ const paperTex = (() => {          // engine.paper(): low-frequency mottling + f
 const rtA = makeRT(W, H, { half: true, depth: true }), rtB = makeRT(W, H, { half: true, depth: true });
 const finalMat = new THREE.ShaderMaterial({
   uniforms: { a: { value: rtA.texture }, b: { value: rtB.texture }, paper: { value: paperTex },
-    mulA: { value: new THREE.Vector3(1, 1, 1) }, addA: { value: new THREE.Vector3() }, vigA: { value: 0.25 },
-    mulB: { value: new THREE.Vector3(1, 1, 1) }, addB: { value: new THREE.Vector3() }, vigB: { value: 0.25 },
+    mulA: { value: new THREE.Vector3(1, 1, 1) }, addA: { value: new THREE.Vector3() }, vigA: { value: 0.25 }, filtA: { value: new THREE.Vector2(0, 1) },
+    mulB: { value: new THREE.Vector3(1, 1, 1) }, addB: { value: new THREE.Vector3() }, vigB: { value: 0.25 }, filtB: { value: new THREE.Vector2(0, 1) },
     mode: { value: 0 }, u: { value: 0 }, dir: { value: 1 }, paperK: { value: 1 } },
   vertexShader: QVS, fragmentShader: `
-  uniform sampler2D a, b, paper; uniform vec3 mulA, addA, mulB, addB; uniform float vigA, vigB, u, dir, paperK; uniform int mode;
+  uniform sampler2D a, b, paper; uniform vec3 mulA, addA, mulB, addB; uniform vec2 filtA, filtB; uniform float vigA, vigB, u, dir, paperK; uniform int mode;
   varying vec2 vUv;
-  vec3 shot(sampler2D t, vec2 uv, vec3 mul, vec3 add, float vig){       // grade + vignette of one shot (render_shot)
+  vec3 shot(sampler2D t, vec2 uv, vec3 mul, vec3 add, float vig, vec2 filt){       // filter + grade + vignette of one shot (render_shot)
     if (uv.x < 0.0 || uv.x > 1.0) return vec3(0.0);
-    vec3 c = texture2D(t, uv).rgb * mul + add;
+    vec3 c = texture2D(t, uv).rgb;
+    if (filt.x > 0.5) {
+      float lum = dot(c, vec3(0.299, 0.587, 0.114));
+      if (filt.x < 1.5) {
+        float l = 0.08 + lum * 0.86;
+        c = mix(c, vec3(l * 1.04, l * 0.88, l * 0.70), filt.y);
+      } else {
+        vec3 m = c * 0.45 + vec3(lum) * 0.55;
+        c = mix(c, m * vec3(0.444, 0.592, 0.799) + vec3(0.0, 0.03, 0.07), filt.y);
+      }
+    }
+    c = c * mul + add;
     vec2 q = (uv - 0.5) * 2.0;
     return c * (1.0 - vig * pow(clamp(length(q) - 0.45, 0.0, 1.0), 1.6));
   }
-  vec3 shifted(sampler2D t, float dx, float bw, vec3 mul, vec3 add, float vig){   // cv2.warpAffine shift + cv2.blur((bw,1))
-    if (bw <= 2.0) return shot(t, vUv - vec2(dx / ${W}.0, 0.0), mul, add, vig);
+  vec3 shifted(sampler2D t, float dx, float bw, vec3 mul, vec3 add, float vig, vec2 filt){   // cv2.warpAffine shift + cv2.blur((bw,1))
+    if (bw <= 2.0) return shot(t, vUv - vec2(dx / ${W}.0, 0.0), mul, add, vig, filt);
     vec3 s = vec3(0.0);
     for (int i = 0; i < 40; i++) {
       float o = (float(i) + 0.5) / 40.0 * bw - bw * 0.5;
-      s += shot(t, vUv - vec2((dx - o) / ${W}.0, 0.0), mul, add, vig);
+      s += shot(t, vUv - vec2((dx - o) / ${W}.0, 0.0), mul, add, vig, filt);
     }
     return s / 40.0;
   }
   void main(){
-    vec3 cur = shot(a, vUv, mulA, addA, vigA), c = cur;
+    vec3 cur = shot(a, vUv, mulA, addA, vigA, filtA), c = cur;
     float e = 0.5 - 0.5 * cos(3.14159265 * clamp(u, 0.0, 1.0));
-    if (mode == 1) c = shot(b, vUv, mulB, addB, vigB) * (1.0 - e) + cur * e;
+    if (mode == 1) c = shot(b, vUv, mulB, addB, vigB, filtB) * (1.0 - e) + cur * e;
     else if (mode == 2) {
       float bw = floor(1.0 + 120.0 * sin(3.14159265 * u));
-      vec3 A = shifted(b, -dir * ${W}.0 * e, bw, mulB, addB, vigB), B = shifted(a, dir * ${W}.0 * (1.0 - e), bw, mulA, addA, vigA);
+      vec3 A = shifted(b, -dir * ${W}.0 * e, bw, mulB, addB, vigB, filtB), B = shifted(a, dir * ${W}.0 * (1.0 - e), bw, mulA, addA, vigA, filtA);
       float x = vUv.x * ${W}.0, edge = dir > 0.0 ? floor(${W}.0 * (1.0 - e)) : floor(${W}.0 * e);
       float m = dir > 0.0 ? step(edge, x) : 1.0 - step(edge, x);
       c = A * (1.0 - m) + B * m;
@@ -373,8 +409,12 @@ const finalMat = new THREE.ShaderMaterial({
     c *= mix(1.0, 0.9 + texture2D(paper, vUv).r * 0.2, paperK);
     gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
   }` });
-const setGrade = (sh, mul, add, vig) => {
+const setGrade = (sh, mul, add, vig, filt) => {
   const g = sh.grade || {}; mul.value.copy(bgr(g.mul)); add.value.copy(bgr(g.add, [0, 0, 0])); vig.value = sh.vignette ?? 0.25;
+  if (filt) {
+    const f = typeof sh.filter === 'string' ? { kind: sh.filter, amount: 1 } : (sh.filter || {});
+    filt.value.set(f.kind === 'sepia' ? 1 : f.kind === 'night' ? 2 : 0, f.amount ?? 1);
+  }
 };
 
 // ------------------------------------------------------------------------------------------------ one frame
@@ -384,18 +424,23 @@ window.renderFrameAt = (fi, capture = false) => {
   const Tm = DATA.t0 + fi / FPS;
   let si = shots.findIndex((s) => s.start <= Tm && Tm < s.end); if (si < 0) si = shots.length - 1;
   const sh = shots[si], t = Tm - sh.start, tin = sh.tin;
+  for (let i = 0; i < shots.length; i++) if (i !== si && i !== si - 1 && shots[i]._scene) {
+    for (const L of shots[i].layers) if (L._sil) { L._sil.dispose(); L._sil = null; }
+  }
   const fu = finalMat.uniforms;
-  if (OT) { OT.render(Tm, rtA); setGrade({}, fu.mulA, fu.addA, fu.vigA); fu.mode.value = 0;    // one take: no cuts
+  if (OT) { OT.render(Tm, rtA); setGrade({}, fu.mulA, fu.addA, fu.vigA, fu.filtA); fu.mode.value = 0;    // one take: no cuts
     if (OT.noFilter) { fu.vigA.value = 0; fu.paperK.value = 0; } }                               // filter off: no vignette / grain
-  else { renderShot(sh, t, rtA); setGrade(sh, fu.mulA, fu.addA, fu.vigA); fu.mode.value = 0; }
+  else { renderShot(sh, t, rtA); setGrade(sh, fu.mulA, fu.addA, fu.vigA, fu.filtA); fu.mode.value = 0; }
   if (!OT && tin && si > 0 && t < (tin.dur ?? 0.35)) {
     const prev = shots[si - 1];
-    renderShot(prev, prev.end - prev.start + t, rtB); setGrade(prev, fu.mulB, fu.addB, fu.vigB);
+    renderShot(prev, prev.end - prev.start + t, rtB); setGrade(prev, fu.mulB, fu.addB, fu.vigB, fu.filtB);
     fu.mode.value = tin.kind === 'whip' ? 2 : 1; fu.u.value = t / (tin.dur ?? 0.35); fu.dir.value = tin.dir ?? 1;
   }
   if (capture === 'raw') {
     pass(finalMat, rtOut); renderer.setRenderTarget(null);
-    return renderer.readRenderTargetPixelsAsync(rtOut, 0, 0, W, H, rawBuf).then(() => { window.frameSocket.send(rawBuf); return 1; });
+    renderer.readRenderTargetPixels(rtOut, 0, 0, W, H, rawBuf);
+    window.frameSocket.send(rawBuf);
+    return 1;
   }
   pass(finalMat, null);
   return capture ? renderer.domElement.toDataURL('image/png') : null;

@@ -11,11 +11,10 @@ ground, y down. Colours BGR.
 | feet, lift | foot x (left, right); foot lift (walk) |
 | hL, hR | hand targets relative to each shoulder, torso frame (elbows solved by IK, hang down/out) |
 | handL, handR | mitt / fist / two / open / point |
-| eyes | dot / wide / closed / squint / half / up / side (side-eye, direction from `look`) / roll (eye-roll) / mismatch (one big, one small) / squeeze ("> <") / spiral / stars / teary ; `look` pupil offset |
+| eyes | dot / wide / closed / squint / half / up ; `look` pupil offset |
 | brows | (tilt deg: + worried/raised inner, - angry, raise units) |
-| mouth, mopen | smile / grin / open / shout / flat / grit / gulp / talk (talk flaps on `talk` spans) / frown / twitch / jawdrop / teeth / pout |
-| sweat | 0..3 (1 = one drop, 2-3 = more drops) |
-| tears, blush, pale, vein | 0..1 tear streams / cheek blush / blue-grey dread lines on the forehead / anger vein |
+| mouth, mopen | smile / grin / open / shout / flat / grit / gulp / talk (talk flaps on `talk` spans) |
+| sweat | 0..1 sweat drop |
 | gait, stride, hneck, hat_off | horse rig (horse.py): stand / walk / trot / gallop, cycle phase, neck raise, hat in hand |
 | sweep | -1..1 metal-detector swing (prop `detector`) |
 | prop, coil | none / coil_chest / coil_shoulder / pack ; coil_chest (dx, dy, scale) |
@@ -24,9 +23,6 @@ ground, y down. Colours BGR.
 Library poses (poses.py): rest, rest_side, back, explain, two, point, spread, wave, think, crossed, shrug, cheer,
 shock, gulp, worried, coil_proud, coil_thrust, tie, tug, look_up_back, shade_eyes_back. Override any field:
 `PO.tug(eyes="half", mouth="flat")`.
-Expression presets (face fields only) in `PO.EX` / functions: smug, unimpressed, outraged, side_eye, eye_roll,
-disbelief, panic, cry, dazed, starstruck, furious, cringe, sulk, dread - combine: `PO.point(**PO.EX["panic"])`.
-`python production/poses.py faces` -> review/faces_sheet.jpg.
 
 ## Shot dict
 `id, start, end` (absolute narration seconds, shots touch), `cam` (z0/z1 zoom, x0/x1/y0/y1 pan px, focus, ease
@@ -39,24 +35,9 @@ inout/out/linear), `tin` (kind whip with dir +-1 / fade, dur ~0.32-0.4), `shake`
   bigger depth_px = nearer), `scale` px per unit (0.4-0.6 full body, ~1.1 waist-up with `shadow=False` and pos y
   ~1270). keys `[(t_rel, pose, dict(dur=0.18, amp=1.0, deg=2.5))]`. kw: flip, phase, talk=S.talk_spans(W, st, en, st),
   walk=dict(period=0.56, ph=0 or pi), motions (engine: drift(dur, dx, dy, scale, ease), bob, jolt, punch, enter,
-  tremble), idle_off, shadow, depth; blur (px, depth of field), haze (0..1 toward haze_col), tint (BGR multiply).
+  tremble), idle_off, shadow, depth.
 - `S.rope(a, b, sag=(before, after), switch=t)`: a, b = indices of two earlier toon layers (left, right).
 - engine `char` layers (PNG poses) also render, for shots that need generated art.
-
-## Depth, shot sizes, mood (stage.py)
-- `S.cam_on(subject_xy, size="MS", push=0.05, dx=0, dy=0, head=0)` -> a cam dict framing a point at a shot size:
-  `S.SHOT_SIZES` ECU 3.2, CU 2.3, MCU 1.75, MS 1.3, MWS 1.1, WS 1.0, EWS 0.92 (zoom); `head` lifts the focus px
-  (negative = subject lower in frame, e.g. low angle / headroom). A pull-back reveal: `cam=dict(z0=3.0, z1=1.05,
-  focus=...)`.
-- `S.joint(D, pos, scale, pose, "head"|"handL"|"handR"|"footL"|"hip"|"horse_head"...)` -> screen px of a joint for the
-  same toon placement (frame close-ups on a face or a hand, pin overlays to a hand).
-- `S.fg(D, pos, scale, keys, blur=7, depth=1.5)` foreground occluder: a big blurred character at the frame edge,
-  moving faster than the scene (depth > 1). Put it after the main characters. `S.fg_plate(set, blur, depth, scale,
-  only=[layer names])` for a blurred plate layer in front.
-- `S.mood("spotlight", t, at, r=300, soft=140, dark=0.85, cone=True, world=True)` stage light; `S.mood("rays", t, at,
-  n=18, alpha=0.35, spin=6, color)` sunburst (place the layer BEFORE the toon to sit behind it); `S.mood("dim", t,
-  amount=0.4)`. (overlay type "mood", param `mode`.)
-- Background blur: `[dict(p, blur=4) for p in S.plates(set)]` (plates already supported `blur`).
 - Riders: `horse.py` as HO: presets BAY SORREL BLACK GREY DUN, `HO.mounted(rider, HO.BAY)`, rider poses ride,
   ride_point, ride_salute, ride_wave_hat, ride_shade_eyes, ride_charge, ride_look_back (+ gait="walk"|"trot"|
   "gallop"); `S.toon(..., walk=dict(period=1.1))` drives the gait; crowds of riders with `march=`. Scale ~0.36-0.5.

@@ -3,7 +3,6 @@
 Arm targets are written for a character facing screen-right (facing "r"); a character facing left uses the same
 pose with the layer's flip=True. Fields: see toon.DEFAULT_POSE.
 python poses.py [cast_key]  -> production/review/poses.jpg (every pose drawn, for choosing and checking)
-python poses.py faces       -> production/review/faces_sheet.jpg (EXPRESSIONS on Custer, trooper, elder, teacher)
 Add project poses in production/cast.py or a segment file the same way: def name(**kw): return P(..., **kw).
 """
 import pathlib, sys
@@ -117,37 +116,6 @@ def cheer_sword(**kw): return P(dict(hL=(-40, -270), heldL="sword", rotL=90, hR=
 def unimpressed(**kw): return P(dict(eyes="half", mouth="flat", brows=(-6, -4), look=(0, 2)), kw)
 def smug(**kw):        return P(dict(eyes="half", mouth="smile", brows=(10, 10), head=-4), kw)
 def outraged(**kw):    return P(dict(eyes="wide", mouth="shout", mopen=1.0, brows=(-20, 4), crack=1.0, head=3), kw)
-# --- exaggerated cartoon expressions (face fields only). Use alone (PO.panic()), or on any body pose:
-#     PO.point(**PO.EX["side_eye"])   PO.shock(**PO.EX["panic"])   PO.cry(hL=(60, -120))
-#     Numeric fields tween (tears, blush, pale, vein, sweat 0..3), so key e.g. cry(tears=0.2) -> cry() to let tears run.
-EX = dict(
-    unimpressed=dict(eyes="half", mouth="flat", brows=(-6, -4), look=(0, 2)),
-    smug=dict(eyes="half", mouth="smile", brows=(10, 10), head=-4),
-    outraged=dict(eyes="wide", mouth="shout", mopen=1.0, brows=(-20, 4), crack=1.0, head=3),
-    side_eye=dict(eyes="side", look=(8, 0), mouth="flat", brows=(-8, -2)),        # look x < 0: glance screen-left
-    eye_roll=dict(eyes="roll", mouth="flat", brows=(8, 12), head=-4),
-    disbelief=dict(eyes="mismatch", mouth="twitch", brows=(0, 10)),                # look x < 0: big eye on the left
-    panic=dict(eyes="wide", mouth="jawdrop", mopen=1.0, sweat=2.0, pale=1.0, brows=(22, 16)),
-    cry=dict(eyes="teary", mouth="frown", tears=1.0, brows=(24, 6)),
-    dazed=dict(eyes="spiral", mouth="gulp", brows=(10, 4), head=6),
-    starstruck=dict(eyes="stars", mouth="grin", blush=1.0, brows=(12, 14)),
-    furious=dict(eyes="squeeze", mouth="teeth", vein=1.0, brows=(-22, 0)),
-    cringe=dict(eyes="squeeze", mouth="teeth", sweat=1.0, brows=(18, 2)),
-    sulk=dict(eyes="side", look=(-8, 0), mouth="pout", blush=0.5, brows=(12, -2)),
-    dread=dict(eyes="dot", mouth="frown", pale=1.0, sweat=1.0, brows=(24, 8)),
-)
-def side_eye(**kw):    return P(EX["side_eye"], kw)
-def eye_roll(**kw):    return P(EX["eye_roll"], kw)
-def disbelief(**kw):   return P(EX["disbelief"], kw)
-def panic(**kw):       return P(EX["panic"], kw)
-def cry(**kw):         return P(EX["cry"], kw)
-def dazed(**kw):       return P(EX["dazed"], kw)
-def starstruck(**kw):  return P(EX["starstruck"], kw)
-def furious(**kw):     return P(EX["furious"], kw)
-def cringe(**kw):      return P(EX["cringe"], kw)
-def sulk(**kw):        return P(EX["sulk"], kw)
-def dread(**kw):       return P(EX["dread"], kw)
-EXPRESSIONS = [side_eye, eye_roll, disbelief, panic, cry, dazed, starstruck, furious, cringe, sulk, dread]
 
 # --- teacher / host poses (glasses: pose field specs; props mug, red_pen, stamp, sticker)
 def hold_mug(**kw):    return P(dict(facing="r", hL=(130, 120), heldL="mug", mouth="flat", eyes="half"), kw)
@@ -167,8 +135,7 @@ def slap_sticker(**kw): return P(dict(facing="r", lean=8, feet=(-80, 90), hL=(30
 def lean_talk(**kw):   return P(dict(facing="r", lean=-4, hip=(10, 0), hL=(270, -40), handL="open", hR=(-60, 120),
                                      mouth="talk", brows=(12, 10)), kw)
 
-# --- ep02 (Little Bighorn): metal detector (heldL="detector"; pose field sweep -1..1 swings the coil, it tweens)
-#     A sweep = alternate keys sweep_detector() / sweep_detector_b() (or any sweep values) every ~0.6-0.9 s.
+# --- ep02 (Little Bighorn): metal detector + witnesses, saloon, records office, 1984 dig
 def sweep_detector(**kw):   return P(dict(facing="r", lean=8, head=8, hL=(196, 172), heldL="detector", sweep=-0.8,
                                           hR=(-20, 230), look=(8, 12), mouth="flat", brows=(4, 2)), kw)
 def sweep_detector_b(**kw): return P(dict(facing="r", lean=10, head=10, hL=(236, 150), heldL="detector", sweep=0.8,
@@ -181,33 +148,68 @@ def detector_beep(**kw):    return P(dict(facing="r", lean=4, head=4, hL=(160, 1
                                           hR=(180, 40), handR="point", eyes="wide", look=(8, 14), mouth="open",
                                           mopen=0.6, brows=(16, 14)), kw)
 def hold_detector(**kw):    return P(dict(facing="r", hL=(70, 236), heldL="detector", sweep=-1.25, mouth="smile"), kw)
-
-# --- ep02 batch 2: witnesses, saloon, records office, 1984 dig
 def tell(**kw):        return P(dict(facing="r", hL=(170, 150), handL="open", hR=(-20, 236), head=-3, eyes="half",
                                      look=(4, 2), mouth="talk", mopen=0.3, brows=(2, 0)), kw)
-
-def toast(**kw):        return P(dict(facing="r", hL=(250, -170), heldL="beer", mouth="grin", eyes="closed",
+def toast(**kw):       return P(dict(facing="r", hL=(250, -170), heldL="beer", mouth="grin", eyes="closed",
                                      brows=(8, 6)), kw)
 def hold_up_item(**kw): return P(dict(facing="r", hL=(190, -40), handL="fist", heldL="cartridge", look=(10, -6),
-                                     mouth="open", mopen=0.4, brows=(12, 8)), kw)
-def kneel_find(**kw):   return P(dict(facing="r", hip=(-40, 132), feet=(-222, 147), hL=(200, -60), heldL="cartridge",
+                                      mouth="open", mopen=0.4, brows=(12, 8)), kw)
+def kneel_find(**kw):  return P(dict(facing="r", hip=(-40, 132), feet=(-222, 147), hL=(200, -60), heldL="cartridge",
                                      hR=(40, 200), look=(10, -8), mouth="open", mopen=0.5, eyes="wide"), kw)
-def push_drawer(**kw):  return P(dict(facing="r", lean=14, feet=(-90, 80), hL=(280, 110), hR=(220, 130),
+def push_drawer(**kw): return P(dict(facing="r", lean=14, feet=(-90, 80), hL=(280, 110), hR=(220, 130),
                                      handL="open", handR="open", mouth="flat", eyes="half", brows=(-6, -2)), kw)
-def hold_exam(**kw):    return P(dict(facing="f", hL=(150, 190), hR=(-60, 210), heldL="exam", mouth="gulp",
+def hold_exam(**kw):   return P(dict(facing="f", hL=(150, 190), hR=(-60, 210), heldL="exam", mouth="gulp",
                                      sweat=0.8, brows=(20, 8)), kw)
 def hang_picture(**kw): return P(dict(facing="b", hL=(-120, -250), hR=(120, -250), handL="open", handR="open"), kw)
-def ride_note(**kw):    return P(dict(facing="r", hL=(150, -60), heldL="note", mouth="flat"), kw)
+def ride_note(**kw):   return P(dict(facing="r", hL=(150, -60), heldL="note", mouth="flat"), kw)
+
+# --- ep02 batch 3: historical firearms, scouting, mining, telegraph (using strictly clean v2 face fields)
+def aim_carbine(**kw):      return P(dict(facing="r", lean=6, feet=(-100, 90), hL=(170, -60), heldL="carbine", rotL=-4, fixL=1,
+                                          hR=(250, -60), eyes="squint", mouth="grit", brows=(-14, 0)), kw)
+def hold_carbine(**kw):     return P(dict(facing="r", hL=(140, 80), heldL="carbine", rotL=-42, fixL=1, hR=(200, 20),
+                                          mouth="flat"), kw)
+def pry_carbine(**kw):      return P(dict(facing="r", lean=12, hip=(-20, 30), feet=(-105, 85), hL=(160, 70),
+                                          heldL="carbine", rotL=-18, fixL=1, hR=(195, 45), heldR="pocketknife",
+                                          rotR=135, fixR=1, eyes="wide", mouth="grit", sweat=1.0, brows=(18, 10)), kw)
+def aim_winchester(**kw):   return P(dict(facing="r", lean=6, feet=(-105, 90), hL=(175, -55), heldL="winchester",
+                                          rotL=-3, fixL=1, hR=(255, -55), eyes="squint", mouth="flat",
+                                          brows=(-14, 0)), kw)
+def lever_winchester(**kw): return P(dict(facing="r", lean=5, feet=(-100, 85), hL=(165, -20), heldL="winchester",
+                                          rotL=-12, fixL=1, hR=(215, 25), eyes="wide", mouth="shout",
+                                          brows=(-16, 4)), kw)
+def look_binoculars(**kw):  return P(dict(facing="r", lean=4, head=-4, hL=(145, -135), heldL="binoculars", rotL=-6,
+                                          fixL=1, hR=(160, -130), eyes="squint", mouth="flat", brows=(-10, 0)), kw)
+def swing_pickaxe(**kw):    return P(dict(facing="r", lean=-8, feet=(-95, 90), hL=(-30, -255), heldL="pickaxe",
+                                          rotL=38, hR=(145, 110), eyes="wide", mouth="grin", brows=(10, 10)), kw)
+def strike_pickaxe(**kw):   return P(dict(facing="r", lean=14, feet=(-100, 95), hL=(235, 140), heldL="pickaxe",
+                                          rotL=118, hR=(155, 165), eyes="squint", mouth="open", mopen=0.5,
+                                          brows=(-12, 0)), kw)
+def pan_gold(**kw):         return P(dict(facing="r", lean=6, hL=(175, 70), heldL="gold_pan", hR=(210, 30),
+                                          handR="point", eyes="closed", mouth="grin", brows=(12, 12)), kw)
+def read_telegraph(**kw):   return P(dict(facing="r", hL=(175, 45), heldL="telegraph", hR=(120, 90), handR="point",
+                                          look=(8, 6), eyes="wide", mouth="flat", brows=(-12, 4)), kw)
+def carry_hardtack(**kw):   return P(dict(facing="r", lean=8, hL=(165, 95), heldL="hardtack", hR=(190, 80),
+                                          handR="open", look=(8, 10), mouth="open", mopen=0.4), kw)
+def cower_head(**kw):       return P(dict(facing="r", lean=-6, hip=(-14, 20), feet=(-95, 75), hL=(45, -195),
+                                          hR=(95, -190), handL="open", handR="open", eyes="wide", mouth="gulp",
+                                          sweat=1.0, brows=(20, 14)), kw)
+def beg_knees(**kw):        return P(dict(facing="r", hip=(-40, 132), feet=(-222, 147), lean=10, hL=(195, 15),
+                                          hR=(185, 25), handL="fist", handR="fist", eyes="wide", sweat=1.0,
+                                          mouth="gulp", brows=(22, 8)), kw)
+def bang_table(**kw):       return P(dict(facing="r", lean=10, hL=(245, 95), handL="fist", hR=(-40, 140),
+                                          eyes="wide", mouth="shout", mopen=0.9, brows=(-18, 0)), kw)
+def wave_off(**kw):         return P(dict(facing="r", lean=-4, head=-4, hL=(235, -35), handL="open", hR=(-50, 180),
+                                          eyes="half", look=(-6, -2), mouth="smile", brows=(8, -2)), kw)
+def write_saddle(**kw):     return P(dict(facing="r", lean=12, head=8, hL=(175, 80), heldL="note", hR=(210, 60),
+                                          heldR="quill", rotR=-125, fixR=1, eyes="wide", sweat=0.8, mouth="grit",
+                                          brows=(14, 8)), kw)
 
 ALL = [rest, rest_side, back, explain, two, point, spread, wave, think, crossed, shrug, cheer, shock, gulp,
        worried, coil_proud, coil_thrust, tie, tug, look_up_back, shade_eyes_back,
        hold_sword, raise_sword, strike_sword, guard, shield_up, stand_spear, spear_shield, thrust_spear, march,
        march_spear, draw_bow, aim_crossbow, hammer_up, hammer_down, read_scroll, read_book, write_quill, hold_torch,
        torch_up, hold_flag, hold_banner, hold_lantern, use_wrench, hold_staff, bow_greeting, gongshou, salute, kneel,
-       present, pharaoh, cheer_sword, unimpressed, smug, outraged,
-       hold_mug, sip_mug, push_specs, stare, stamp_up, stamp_down, mark_pen, slap_sticker, lean_talk,
-       sweep_detector, sweep_detector_b, detector_front, detector_front_b, detector_beep, hold_detector,
-       tell, toast, hold_up_item, kneel_find, push_drawer, hold_exam, hang_picture] + EXPRESSIONS
+       present, pharaoh, cheer_sword, unimpressed, smug, outraged]
 LEGACY = ALL[:21]       # the climbers' poses (before the history set)
 
 # preset name (costumes.PRESETS) -> poses shown on the preset sheet (python costumes.py)
@@ -243,37 +245,6 @@ if __name__ == "__main__":
     ROOT = pathlib.Path(__file__).resolve().parent.parent
     sys.path.insert(0, str(ROOT / "production"))
     import cast
-    if len(sys.argv) > 1 and sys.argv[1] == "faces":   # expression sheet -> production/review/faces_sheet.jpg
-        import bust
-        rows = [("custer", cast.CUSTER), ("trooper", cast.TROOPER), ("lakota_elder", cast.LAKOTA_ELDER),
-                ("teacher", bust.TEACHER)]
-        cw, bg = 260, 0.86
-        out = []
-        for rn, D in rows:
-            tiles = []
-            for f in EXPRESSIONS:
-                p = f()
-                f1 = np.full((900, 900, 3), bg, np.float32)          # close-up: scale 1.4, cropped to the head
-                hx, hy = T.render_char(f1, D, p, [[1.4, 0, 450], [0, 1.4, 2300]])["head"]
-                f1 = np.full((900, 900, 3), bg, np.float32)
-                T.render_char(f1, D, p, [[1.4, 0, 900 - hx], [0, 1.4, 2300 - (hy - 520)]])
-                big = cv2.resize(f1[100:900, 50:850], (cw, cw), interpolation=cv2.INTER_AREA)
-                sm = np.full((600, cw, 3), bg, np.float32)          # full body at the normal scale 0.42
-                T.render_char(sm, D, p, [[0.42, 0, cw / 2], [0, 0.42, 585]])
-                t = np.vstack([big, sm])
-                t[:, -2:] = 0.55
-                t = (np.clip(t, 0, 1) * 255).astype(np.uint8)
-                cv2.putText(t, f.__name__, (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (30, 30, 30), 2)
-                tiles.append(t)
-            row = np.hstack(tiles)
-            row[-3:] = 60
-            out.append(row)
-        img = np.vstack(out)
-        o = ROOT / "production" / "review" / "faces_sheet.jpg"
-        o.parent.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(str(o), img, [cv2.IMWRITE_JPEG_QUALITY, 88])
-        print(o)
-        sys.exit()
     key = sys.argv[1] if len(sys.argv) > 1 else next(iter(cast.CAST))
     D = cast.CAST[key]
     cols, cw, ch = 8, 300, 560

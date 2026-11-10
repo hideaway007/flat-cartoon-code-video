@@ -2174,22 +2174,8 @@ def ptext(pt, text, x, y, size, color=(30, 26, 24), font="LilitaOne-Regular.ttf"
 
 
 def furrows(pt, vp, gy, h, n=22, color=(0, 0, 0), width=4.0, spread=2.6, x_rows=0, seed=0):
-    """DEPTH: lines on the ground converging to a vanishing point vp=(x, y) on the horizon: ploughed furrows, wheel
-    ruts, a survey grid. spread = width of the fan at the bottom edge (x plate widths); x_rows adds cross lines spaced
-    by perspective (denser toward the horizon) for a grid / field edges. h = plate height (lines start below it)."""
-    vx, vy = vp
-    w = pt.img.shape[1] / SS
-    rng = np.random.default_rng(seed)
-    for k in range(n):
-        u = k / max(n - 1, 1)
-        xb = vx + (u - 0.5) * w * spread + rng.uniform(-8, 8)
-        a, b = (xb, h + 20), (vx + (xb - vx) * 0.04, vy + 4)
-        pt.line([a, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), b], width, color)
-    for j in range(1, x_rows + 1):
-        f = (j / (x_rows + 1)) ** 2.2
-        y = vy + (h + 20 - vy) * f
-        half = (w * spread / 2) * f + 40
-        pt.line([(vx - half, y), (vx + half, y)], max(1.5, width * (0.4 + f)), color)
+    pass
+
 
 
 def fog(pl, name, depth, y0, y1, color=(236, 240, 242), peak=0.75, seed=0):

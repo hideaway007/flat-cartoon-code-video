@@ -17,9 +17,9 @@ import crowds as _CR
 _orig_strip = _CR._strip_layer
 
 
-def _strip_with_members(mem, y_r, hz, haze_col, shadow, march, idle, g, r, keys, depth, root, tag, blur=0.0):
+def _strip_with_members(mem, y_r, hz, haze_col, shadow, march, idle, g, r, keys, depth, root, tag, *extra):
     """crowds._strip_layer + the members themselves, so the 3D stage can stand every person on their own card."""
-    L = _orig_strip(mem, y_r, hz, haze_col, shadow, march, idle, g, r, keys, depth, root, tag, blur)
+    L = _orig_strip(mem, y_r, hz, haze_col, shadow, march, idle, g, r, keys, depth, root, tag)
     L["_members"] = [dict(D=m["D"], s=m["s"], flip=m["flip"], x=m["x"], y=y_r,
                           seq=[[t, frames] for t, frames in m["seq"]]) for m in mem]
     L["_march"] = march
@@ -67,7 +67,8 @@ od = HERE / "stage_assets"
 od.mkdir(exist_ok=True)
 name = f"{seg}_{t0:g}-{t1:g}"
 (od / f"{name}.json").write_text(json.dumps(out))
-src = next(iter(sorted((ROOT / "assets" / "audio").glob("*.wav"))))
+lufs_wav = ROOT / "production" / "tts" / "narration_-14LUFS.wav"
+src = lufs_wav if lufs_wav.exists() else next(iter(sorted((ROOT / "assets" / "audio").glob("*.wav"))))
 subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t0:.3f}", "-t", f"{t1 - t0:.3f}", "-i", str(src),
                 str(od / f"{name}.wav")], check=True)
 print(name, len(shots), "shots:", [s["id"] for s in shots], kinds)

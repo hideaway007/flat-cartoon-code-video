@@ -45,7 +45,7 @@ GREEN = (86, 196, 104)
 OL = 4.5                                   # outline width (px) of overlay shapes at 1080p
 
 TYPES = ("circle", "underline", "arrow", "label", "title", "caption_pop", "counter", "bars", "route", "spotlight",
-         "emote", "meter", "stamp", "report_card", "mood")
+         "emote", "meter", "stamp", "report_card")
 EMOTES = ("question", "exclaim", "sweat", "anger", "sparkle", "impact", "speed")
 FILTERS = ("sepia", "night")
 
@@ -1410,8 +1410,6 @@ def render(frame, L, sh, t, tn, shk):
         stamp(frame, c, L, age, outk)
     elif k == "report_card":
         report_card(frame, c, L, age, outk)
-    elif k == "mood":
-        mood(frame, c, L, age, outk, t)
 
 
 def extra_shake(sh, t):
@@ -1428,7 +1426,7 @@ def extra_shake(sh, t):
 REQUIRED = dict(circle=[("at", "box")], underline=[("pts", "span")], arrow=["pts"], label=["text", "at"],
                 title=["text"], caption_pop=["text", "at"], counter=["b", "at"], bars=["items", "at"], route=["pts"],
                 spotlight=[("at", "keys")], emote=["symbol", "at"], meter=["at"], stamp=["text", "at"],
-                report_card=["rows", "at"], mood=["mode"])
+                report_card=["rows", "at"])
 
 
 def check(L, dur, sid):
@@ -1478,55 +1476,3 @@ def check(L, dur, sid):
 def check_filter(f, sid):
     kind = f if isinstance(f, str) else (f.get("kind") if isinstance(f, dict) else None)
     return [] if kind in FILTERS else [f"{sid}: unknown filter {f!r} (known: {', '.join(FILTERS)})"]
-
-
-_mood_grid = {}
-
-
-def mood(frame, c, L, age, outk, shot_t):
-    """mood light (ep02). kind:
-    spotlight  stage light: everything dark except a soft pool at `at` (r, soft, dark 0.85, warm=(1.0, 0.93, 0.78)
-               multiplies the lit pool) plus an optional cone from the top (cone=True)
-    rays       radial sunburst centred on `at`: alternating light wedges (n=18, color YELLOW-ish, alpha 0.35, spin
-               deg/s) - draw it BEFORE the character (put the overlay layer before the toon) for a halo behind them
-    dim        darken the whole frame by `amount` (0..1), e.g. for a sad beat"""
-    kind = L["mode"]
-    u = ease_out(age / L.get("fade", 0.35), 3) * outk * L.get("opacity", 1.0)
-    H_, W_ = frame.shape[:2]
-    q = 2
-    key = (H_ // q, W_ // q)
-    if key not in _mood_grid:
-        _mood_grid[key] = np.mgrid[0:key[0], 0:key[1]].astype(np.float32) * q + q / 2
-    gy, gx = _mood_grid[key]
-    if kind == "dim":
-        frame *= 1 - L.get("amount", 0.4) * u
-        return
-    P = c.pt(np.array(L.get("at", (W_ / 2, H_ / 2)), float))
-    if kind == "spotlight":
-        r = float(L.get("r", 300)) * c.k
-        soft = float(L.get("soft", 140)) * c.k
-        d = np.sqrt(((gx - P[0]) / L.get("aspect", 1.0)) ** 2 + (gy - P[1]) ** 2)
-        lit = 1 - np.clip((d - r) / max(soft, 1), 0, 1)
-        if L.get("cone", True):   # a soft beam from above the pool to the top of the frame
-            top_w = r * 0.55
-            half = top_w + (r - top_w) * np.clip(gy / max(P[1], 1), 0, 1)
-            beam = (1 - np.clip((np.abs(gx - P[0]) - half) / max(soft * 0.6, 1), 0, 1)) * (gy < P[1])
-            lit = np.maximum(lit, beam * 0.55)
-        dark = L.get("dark", 0.85) * u
-        m = cv2.resize((1 - dark * (1 - lit)).astype(np.float32), (W_, H_), interpolation=cv2.INTER_LINEAR)
-        warm = np.array(L.get("warm", (0.88, 1.0, 1.06)), np.float32)
-        litm = cv2.resize(lit.astype(np.float32), (W_, H_), interpolation=cv2.INTER_LINEAR)[..., None]
-        frame *= m[..., None]
-        frame *= 1 + (warm - 1) * litm * u
-        return
-    if kind == "rays":
-        n = int(L.get("n", 18))
-        spin = math.radians(L.get("spin", 6.0)) * shot_t
-        ang = np.arctan2(gy - P[1], gx - P[0]) + spin
-        wedge = (np.cos(ang * n) > 0.15).astype(np.float32)
-        d = np.sqrt((gx - P[0]) ** 2 + (gy - P[1]) ** 2)
-        fall = np.clip(1 - d / (L.get("reach", 1400) * c.k), 0, 1) ** 0.7
-        a = cv2.resize(wedge * fall, (W_, H_), interpolation=cv2.INTER_LINEAR)[..., None] * L.get("alpha", 0.35) * u
-        col = np.array(_bgr(L.get("color", (150, 226, 255))), np.float32) / 255.0
-        frame[:] = frame * (1 - a) + col * a
-        return

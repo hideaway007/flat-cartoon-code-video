@@ -31,11 +31,11 @@ def _h(obj):
     return hashlib.sha1(json.dumps(obj, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
-def sprite(D, p, scale, flip=False, haze=0.0, haze_col=(0.80, 0.84, 0.88), shadow=0.28, root=None, blur=0.0):
+def sprite(D, p, scale, flip=False, haze=0.0, haze_col=(0.80, 0.84, 0.88), shadow=0.28, root=None):
     """draw one character to a premultiplied float BGRA array at `scale` px/unit. Returns (img, (ax, ay)) where
     (ax, ay) is the feet anchor (char origin) in sprite px. Cached as a PNG (straight alpha) under assets/cache."""
     root = pathlib.Path(root or ROOT)
-    key = _h(["v1", D, p, round(scale, 4), flip, round(haze, 3), haze_col, shadow] + ([round(blur, 2)] if blur else []))
+    key = _h(["v1", D, p, round(scale, 4), flip, round(haze, 3), haze_col, shadow])
     png = root / CACHE / f"m_{key}.png"
     meta = png.with_suffix(".json")
     if png.exists() and meta.exists():
@@ -61,12 +61,6 @@ def sprite(D, p, scale, flip=False, haze=0.0, haze_col=(0.80, 0.84, 0.88), shado
         a = small[..., 3:4]
         small[..., :3] = small[..., :3]                  # shadow colour is black: only alpha grows
         small[..., 3:4] = a + sh[..., None] * (1 - a)
-    if blur > 0.3:   # depth of field: soften the whole premultiplied sprite (pad first so the blur can spread)
-        pad = int(blur * 3) + 2
-        small = cv2.copyMakeBorder(small, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
-        k = int(blur * 3) * 2 + 1
-        small = cv2.GaussianBlur(small, (k, k), blur)
-        ox, oy, w, h = ox + pad, oy + pad, w + 2 * pad, h + 2 * pad
     ys, xs = np.nonzero(small[..., 3] > 0.004)
     if len(xs) == 0:
         return small[:1, :1], (0.0, 0.0)
@@ -110,14 +104,14 @@ def _jitter(p, rng, amount):
     return q
 
 
-def walk_cycle(p, n=4):
+def walk_cycle(p, n=4, phase=0.0):
     """n poses of a walk-in-place cycle (feet lift + free arms swing) from pose p (held props keep their arm)."""
     out = []
     if p.get("gait", "stand") in ("walk", "trot", "gallop"):   # horse.py rig: n frames of the gait cycle (min 8)
         n = max(n, 8)
-        return [dict(p, stride=(p.get("stride", 0.0) + i / n) % 1.0) for i in range(n)]
+        return [dict(p, stride=(p.get("stride", 0.0) + phase + i / n) % 1.0) for i in range(n)]
     for i in range(n):
-        s = math.sin(2 * math.pi * i / n + math.pi / 2)
+        s = math.sin(2 * math.pi * (i / n + phase) + math.pi / 2)
         q = dict(p)
         q["lift"] = (max(0, s) * 40, max(0, -s) * 40)
         if q.get("heldL", "none") == "none":
@@ -131,8 +125,7 @@ def walk_cycle(p, n=4):
 
 def crowd(D, pose, n=8, rows=1, x=(240, 1680), y=900, scale=0.3, row_dy=-46, row_scale=0.86, row_dn=0,
           keys=None, vary=None, seed=1, groups=3, march=None, idle=True, haze=0.0, haze_step=0.16,
-          haze_col=(0.80, 0.84, 0.88), flip=False, jitter=1.0, shadow=0.28, depth=1.0, root=None, name="crowd",
-          blur=0.0, blur_step=0.0):
+          haze_col=(0.80, 0.84, 0.88), flip=False, jitter=1.0, shadow=0.28, depth=1.0, root=None, name="crowd"):
     """rows of people as engine `char` layers (back row first).
     D: design or list of designs; pose: pose dict (or callable); n: people in the front row (row_dn: +/- per row
     further back); x: (left, right) screen span of the front row (back rows are staggered by half a spacing);
@@ -141,8 +134,7 @@ def crowd(D, pose, n=8, rows=1, x=(240, 1680), y=900, scale=0.3, row_dy=-46, row
     vary: see variants() + scale (relative +-, e.g. 0.05), flip (probability of facing the other way);
     march: dict(dx=px over the shot, dur=shot seconds, period=0.5 s per step cycle, bob=px) -> walk cycle + drift;
     idle: small bob/breathe per phase group; haze: haze of the front row (+haze_step per row back);
-    jitter: random lean/head/look per member (0 = identical poses).
-    blur: depth-of-field blur (px) of the front row, + blur_step per row further back (e.g. blur_step=1.5)."""
+    jitter: random lean/head/look per member (0 = identical poses)."""
     root = pathlib.Path(root or ROOT)
     vary = dict(vary or {})
     pose = pose() if callable(pose) else pose
@@ -154,32 +146,33 @@ def crowd(D, pose, n=8, rows=1, x=(240, 1680), y=900, scale=0.3, row_dy=-46, row
         sc_r = scale * row_scale ** r
         y_r = y + row_dy * r
         hz = min(0.85, haze + haze_step * r)
-        bl = blur + blur_step * r
         x0, x1 = x
         sp = (x1 - x0) / max(nr - 1, 1) if nr > 1 else 0
         stagger = (sp / 2) * (r % 2)
         designs = variants(D, nr, vary, seed=seed * 101 + r)
         members = []
+        eff_groups = 1 if march else groups
         for i in range(nr):
             mrng = random.Random(seed * 7919 + r * 131 + i)
             ms = sc_r * (1 + mrng.uniform(-1, 1) * vary.get("scale", 0.0))
             mf = flip != (mrng.random() < vary.get("flip", 0.0))
             mx = x0 + sp * i + stagger + mrng.uniform(-0.12, 0.12) * sp
+            mph = ((i * 0.37 + r * 0.29) % 1.0) if jitter else 0.0
             seq = []
             for t, pk in keys:
                 pj = _jitter(T.pose(**pk), mrng, jitter)
-                seq.append((t, walk_cycle(pj) if march else [pj]))
-            members.append(dict(D=designs[i], s=ms, flip=mf, x=mx, seq=seq, g=i % groups))
-        for g in range(groups):
+                seq.append((t, walk_cycle(pj, phase=mph) if march else [pj]))
+            members.append(dict(D=designs[i], s=ms, flip=mf, x=mx, seq=seq, g=i % eff_groups))
+        for g in range(eff_groups):
             mem = [m for m in members if m["g"] == g]
             if not mem:
                 continue
             layers.append(_strip_layer(mem, y_r, hz, haze_col, shadow, march, idle, g, r, keys, depth, root,
-                                       f"{name}_r{r}g{g}", bl))
+                                       f"{name}_r{r}g{g}"))
     return layers
 
 
-def _strip_layer(mem, y_r, hz, haze_col, shadow, march, idle, g, r, keys, depth, root, tag, blur=0.0):
+def _strip_layer(mem, y_r, hz, haze_col, shadow, march, idle, g, r, keys, depth, root, tag):
     """composite the members of one phase group into strip PNGs (one per key pose / walk frame), same geometry."""
     frames = []        # list of (t, frame_index) -> per frame a list of (sprite, anchor, x)
     nk = len(mem[0]["seq"])
@@ -189,7 +182,7 @@ def _strip_layer(mem, y_r, hz, haze_col, shadow, march, idle, g, r, keys, depth,
         for ki in range(nk):
             for fi in range(nf):
                 p = m["seq"][ki][1][fi]
-                sprites[(id(m), ki, fi)] = sprite(m["D"], p, m["s"], m["flip"], hz, haze_col, shadow, root, blur)
+                sprites[(id(m), ki, fi)] = sprite(m["D"], p, m["s"], m["flip"], hz, haze_col, shadow, root)
     # common canvas
     lo_x, lo_y, hi_x, hi_y = 1e9, 1e9, -1e9, -1e9
     for m in mem:
@@ -231,7 +224,7 @@ def _strip_layer(mem, y_r, hz, haze_col, shadow, march, idle, g, r, keys, depth,
         for t in times:   # walk frames every step; a key pose change switches at its own time too
             fi = int(round(t / step)) % nf
             ki = max(i for i in range(len(keys)) if keys[i][0] <= t + 1e-6)
-            swaps.append((t, srcs[(ki, fi)], dict(amp=0.0, xf=0.03)))
+            swaps.append((t, srcs[(ki, fi)], dict(amp=0.0, xf=0.0)))
         if march.get("bob", 4):
             motions.append(dict(type="bob", amp=march.get("bob", 4) * (0.86 ** r), period=per / 2))
         if march.get("dx") or march.get("dy"):

@@ -29,8 +29,9 @@ export const BEARD = ['none','stubble','short','long'];
 export const HELD = ['none','sword','gladius','katana','spear','axe','hammer','mallet','mace','bow','longbow','arrow',
   'crossbow','shield_round','shield_kite','shield_heater','scutum','scroll','scroll_open','book','torch','flag','banner',
   'quill','lantern','paper_lantern','wrench','staff','crook','mug','red_pen','stamp','sticker','detector',
-  'note','exam','exam_f','cartridge','beer','bugle','folder'];
-export const UPRIGHT = ['book','scroll_open','exam','exam_f','folder','note','cartridge'];
+  'note','exam','exam_f','cartridge','beer','bugle','folder',
+  'carbine','winchester','binoculars','pickaxe','gold_pan','telegraph','hardtack','pocketknife'];
+export const UPRIGHT = ['book','scroll_open','exam','exam_f','folder','note','cartridge','telegraph','hardtack','gold_pan'];
 export const SHIELDS = ['shield_round','shield_kite','shield_heater','scutum'];
 export const BOWS = ['bow','longbow'];
 

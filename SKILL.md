@@ -94,22 +94,7 @@ session per few segments: a new session reads STATE.md, `words.txt`, `cast.py`, 
   stamp, emote, title card); a new place or date gets a map or a title card.
 - Facing left = the facing-right pose with `flip=True`. Turning around is an instant facing switch inside a tween;
   hide it inside a squash (amp >= 1.2).
-
-## Depth, shot sizes and mood (added 2026-11-09 after a frame-by-frame comparison with Squire Explains)
-
-A user review found the films flat: one layer of space, every shot a full-body medium shot, few expressions. The
-reference fixes this with the tools below; use them in every segment (API in [references/api.md](references/api.md)).
-- Every shot is built around characters. Objects, numbers and maps appear only in their hands or as small accents,
-  never as a shot of their own (user rule).
-- Three layers of space: a foreground occluder (`S.fg`: a big blurred character at the frame edge, extra parallax),
-  the subject sharp, the background soft (`blur=` on toons, `blur_step=` on crowds so each row back is blurrier,
-  `haze=`). Ground lines that converge to a vanishing point (`furrows`, `road`) on outdoor sets.
-- Change shot size every 2-4 shots: `cam=S.cam_on(S.joint(D, pos, scale, pose, "head"), "CU")` with sizes
-  ECU / CU / MCU / MS / MWS / WS / EWS. Mix in over-the-shoulder (foreground shoulder + subject), low angles
-  (`head=-120`, subject large), an ECU on a hand holding the key object, and a pull from ECU to WS for reveals.
-- Expressions change 2-3 times a shot: `PO.EX` presets (side_eye, eye_roll, disbelief, panic, cry, dazed,
-  starstruck, furious, cringe, sulk, dread) over any body pose: `PO.point(**PO.EX["side_eye"])`.
-- Mood follows the emotion, not just the time of day: `S.mood("spotlight" | "rays" | "dim")`, `shake` on impacts.
+- Every shot is built around characters. Objects, numbers and maps appear in their hands or as small accents.
 - Riders: `horse.py` (`HO.mounted(rider, HO.BAY)`, gaits walk / trot / gallop through `walk=` or crowd `march=`).
 
 ## three.js renderer: faster, real 3D camera, one take (added 2026-11-10)

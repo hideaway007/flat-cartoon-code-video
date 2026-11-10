@@ -99,8 +99,9 @@ HELD = ("none", "sword", "gladius", "katana", "spear", "axe", "hammer", "mallet"
         "crossbow", "shield_round", "shield_kite", "shield_heater", "scutum", "scroll", "scroll_open", "book", "torch",
         "flag", "banner", "quill", "lantern", "paper_lantern", "wrench", "staff", "crook",
         "mug", "red_pen", "stamp", "sticker", "detector",
-        "note", "exam", "exam_f", "cartridge", "beer", "bugle", "folder")
-UPRIGHT = ("book", "scroll_open", "exam", "exam_f", "folder", "note", "cartridge")   # props that stay upright
+        "note", "exam", "exam_f", "cartridge", "beer", "bugle", "folder",
+        "carbine", "winchester", "binoculars", "pickaxe", "gold_pan", "telegraph", "hardtack", "pocketknife")
+UPRIGHT = ("book", "scroll_open", "exam", "exam_f", "folder", "note", "cartridge", "telegraph", "hardtack", "gold_pan")   # props that stay upright
 SHIELDS = ("shield_round", "shield_kite", "shield_heater", "scutum")
 BOWS = ("bow", "longbow")
 
@@ -1714,6 +1715,68 @@ def prop(C, kind, side):
         pt.line([o + (-16, 24), o + (16, 24)], LINE * 0.55)
         pt.shape([o + (28, -46), o + (50, -24), o + (36, -22)], WHITE, LINE * 0.5, shade=False)
         tip = o
+    elif kind == "carbine":    # 1873 Springfield single-shot trapdoor carbine (wood stock, steel barrel, trapdoor breech)
+        pt.shape(R([(-220, -18), (-40, -16), (-20, 26), (-220, 46)]), WOOD, LINE * 0.85)
+        pt.shape(R(_rect(-40, 90, 32)), IRON, LINE * 0.8)                                    # receiver
+        pt.shape(R([(10, -16), (76, -42), (82, -26), (16, -4)]), STEEL, LINE * 0.7)          # open trapdoor block
+        pt.stroke(R([(86, -6), (440, -6)]), IRON, 20, LINE * 0.8)                            # barrel
+        pt.shape(R(_rect(86, 290, 28)), WOOD, LINE * 0.75)                                   # fore-end wood
+        pt.shape(R(_rect(190, 206, 32)), STEEL, LINE * 0.6)                                  # barrel band
+        tip = R([(440, -6)])[0]
+    elif kind == "winchester": # 1866 Henry / Winchester repeating rifle (brass receiver, twin barrel + tube magazine, lever)
+        pt.shape(R([(-230, -18), (-50, -16), (-30, 26), (-230, 48)]), WOOD, LINE * 0.85)
+        pt.shape(R(_rect(-50, 96, 36)), GOLD, LINE * 0.85)                                   # brass receiver ("Yellow Boy")
+        pt.stroke(R([(-10, 18), (44, 58), (82, 42), (36, 14)]), IRON, 12, LINE * 0.65)       # lever loop
+        pt.stroke(R([(96, -9), (470, -9)]), IRON, 18, LINE * 0.75)                           # upper barrel
+        pt.stroke(R([(96, 9), (464, 9)]), GOLD_DK, 15, LINE * 0.7)                           # 16-shot tube magazine
+        pt.shape(R(_rect(240, 256, 34)), GOLD, LINE * 0.6)
+        tip = R([(470, -9)])[0]
+    elif kind == "binoculars": # brass & black leather field glasses held to the eyes
+        pt.shape(R(_rect(-24, 130, 56)), BLACK, LINE * 0.85)
+        pt.shape(R([(-24, -34), (136, -46), (136, 46), (-24, 34)]), BLACK, LINE * 0.85)
+        pt.shape(R(_rect(-34, -18, 52)), GOLD, LINE * 0.7)                                   # eyepieces
+        pt.shape(R(_rect(120, 142, 92)), GOLD, LINE * 0.75)                                  # objective rims
+        pt.ell(*R([(142, 0)])[0], 14, 38, (220, 200, 140), LINE * 0.6, shade=False)          # lens glint
+        tip = R([(142, 0)])[0]
+    elif kind == "pickaxe":    # miner's pickaxe: wooden handle + curved iron double-pointed head
+        pt.stroke(R([(-110, 0), (340, 0)]), WOOD, 26, LINE * 0.8)
+        pt.shape(R([(270, -160), (310, -24), (330, 0), (310, 24), (270, 160), (294, 0)]), IRON, LINE * 0.9)
+        tip = R([(270, -160)])[0]
+    elif kind == "gold_pan":   # shallow iron pan with bright gold nuggets inside (upright)
+        u_ = _n(R([(1, 0)])[0] - c)
+        r_ = -_perp(u_)
+        o = c + r_ * 90 + u_ * 20
+        P_ = lambda x, y: o + r_ * x + u_ * y
+        pt.shape([P_(-130, 20), P_(130, 20), P_(96, -38), P_(-96, -38)], IRON, LINE * 0.85)
+        pt.ell(o[0], o[1] + 20, 130, 32, STEEL_DK, LINE * 0.8)
+        for dx, dy, rad in ((-45, 18, 16), (10, 24, 20), (55, 16, 15), (-15, 10, 14)):
+            pt.ell(*(o + r_ * dx + u_ * dy), rad, rad * 0.75, GOLD, LINE * 0.6)
+        tip = o
+    elif kind == "telegraph":  # yellow dispatch sheet / telegram ribbon held up (upright)
+        u_ = _n(R([(1, 0)])[0] - c)
+        r_ = -_perp(u_)
+        o = c + u_ * 95
+        P_ = lambda x, y: o + r_ * x + u_ * y
+        pt.shape([P_(-95, -110), P_(95, -110), P_(95, 110), P_(-95, 110)], (140, 224, 248), LINE * 0.8)
+        pt.shape([P_(-95, 76), P_(95, 76), P_(95, 110), P_(-95, 110)], RED, LINE * 0.6, shade=False)
+        for v in (40, 10, -20, -50, -80):
+            pt.line([P_(-70, v), P_(70, v)], LINE * 0.4, INK)
+        tip = o
+    elif kind == "hardtack":   # wooden army ration crate ("HARDTACK") held in front (upright)
+        u_ = _n(R([(1, 0)])[0] - c)
+        r_ = -_perp(u_)
+        o = c + u_ * 70
+        P_ = lambda x, y: o + r_ * x + u_ * y
+        pt.shape([P_(-125, -85), P_(125, -85), P_(125, 85), P_(-125, 85)], WOOD, LINE * 0.85)
+        for v in (-30, 30):
+            pt.line([P_(-122, v), P_(122, v)], LINE * 0.5, WOOD_DK)
+        pt.shape([P_(-125, -85), P_(-98, -85), P_(-98, 85), P_(-125, 85)], WOOD_DK, LINE * 0.6, shade=False)
+        pt.shape([P_(98, -85), P_(125, -85), P_(125, 85), P_(98, 85)], WOOD_DK, LINE * 0.6, shade=False)
+        tip = o
+    elif kind == "pocketknife": # folding pocketknife with open steel blade (prying jammed shells)
+        pt.shape(R(_rect(-45, 55, 26)), WOOD_DK, LINE * 0.75)
+        pt.shape(R([(55, -11), (155, -9), (185, 4), (145, 13), (55, 11)]), STEEL, LINE * 0.75)
+        tip = R([(185, 4)])[0]
     if tip is not None:
         C.joints["tip" + tag] = np.asarray(tip, float)
         C.joints["grip" + tag] = c
