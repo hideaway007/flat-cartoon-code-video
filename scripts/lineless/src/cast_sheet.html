@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8">
+<style>html,body{margin:0;background:#111}canvas{display:block}</style>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script src="lib.js"></script><script src="figures.js"></script><script src="body.js"></script><script src="horse.js"></script><script src="rider.js"></script><script src="person.js"></script>
+<script src="teacher.js"></script>
+<script>
+// cast sheet: every figure type once. t shifts the walk phase:  node render.mjs stills cast_sheet.html 0.3
+KIT.clerk = { ...KIT.plain, coat: '#6f7f5a', coatSh: '#55633f', pants: '#3f3a44' };
+window.renderFrame = t => {
+  DEAD = 0; TINT = null;
+  g.fillStyle = '#f1e2c4'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#d9b77c'; g.fillRect(0, 900, W, 180);
+  mounted(300, 900, 1.1, { kit: 'custer', coat: 'chestnut', curls: 1, stache: 1, ph: t * 5, blanket: '#2c456e', blaze: 1, socks: 1,
+    hand: [130, -430], brow: 0.5, lid: 0.3, mouth: 'smile', dust: '#e8d3a6' });
+  mounted(760, 900, 0.85, { kit: 'trooper', coat: 'bay', ph: t * 5 + 1, blanket: '#2c456e', beard: 1, hat: 'kepi', skin: 2, hair: 2, eyes: 'wide', mouth: 'open', socks: 1 });
+  standing(1060, 900, 1.05, { kit: 'trooper', ph: t * 5, walk: 1, stache: 1, skin: 1, hair: 1, mouth: 'frown', brow: -0.5 });
+  standing(1290, 900, 1.05, { kit: 'plain', hat: 'none', ph: t * 5, hair: 2, mouth: 'smile', hand: [96, -330], look: 1 });
+  standing(1560, 900, 1.05, { kit: 'clerk', hat: 'slouch', ph: t * 5 + 2, walk: 0.6, beard: 1, skin: 3, hair: 3, eyes: 'wide', mouth: 'open' }, true);
+  at(1790, 1000, 0.6, () => teacher({ mouth: 0.4, brow: 0.4 }));
+};
+</script>

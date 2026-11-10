@@ -302,7 +302,11 @@ export function makeOneTake(ctx) {
     for (const sh of Wd.shots) for (const L of sh.layers.filter((x) => x.kind === 'overlay' && x.type === 'label')) {
       const own = ownerOf(sh, L); if (!own) continue;
       const Dz = own.P.clone().sub(ref.position).dot(fwd);
-      Wd.labels.push({ L, own, P: atDepth(L.at[0], L.at[1], Dz), off: [L.box[0] - L.at[0], L.box[1] - L.at[1]] });
+      // labels are authored in SCREEN coordinates of their shot; in a zoomed shot (close-up, z >= 1.5) the screen point is
+      // plate point = focus + (screen - centre) / zoom, so that is where the leader tip really is in the reference frame
+      const cm = sh.cam || {}, cz = cm.z0 >= 1.5 ? (cm.z0 + (cm.z1 ?? cm.z0)) / 2 : 1, cf = cz > 1 && cm.focus ? cm.focus : [W / 2, H / 2];
+      const atRef = cz > 1 ? [cf[0] + (L.at[0] - W / 2) / cz, cf[1] + (L.at[1] - H / 2) / cz] : L.at;
+      Wd.labels.push({ L, own, P: atDepth(atRef[0], atRef[1], Dz), off: [L.box[0] - L.at[0], L.box[1] - L.at[1]] });
     }
     if (dir.routes) {
       const groups = {}; for (const it of Wd.items) if (it.kind === 'member' && it.vx) (groups[it.group] ||= []).push(it);
@@ -318,7 +322,8 @@ export function makeOneTake(ctx) {
     for (const sh of shots.filter((s) => Wd.shots.includes(s) || (dir.span[0] <= s.start && s.start < dir.span[1]))) {
       sh.layers.forEach((L, li) => {
         if (L.kind !== 'overlay' || !L.world || !OV || L.type === 'mood') return;
-        const at = L.at || [W / 2, H / 2], behind = !sh.layers.slice(0, li).some((x) => x.kind === 'toon');
+        const sft = (dir.ovShift && dir.ovShift[sh.id]) || [0, 0];     // a shot whose character stands elsewhere than in the base shot
+        const at = L.at ? [L.at[0] + sft[0], L.at[1] + sft[1]] : [W / 2, H / 2], behind =!sh.layers.slice(0, li).some((x) => x.kind === 'toon');
         let Dz;
         const near = Wd.items.filter((it) => Math.abs((it.kind === 'toon' ? it.L.pos[0] : it.m.x) - at[0]) < 380);
         if (behind && Wd.subj) Dz = Wd.subj.P.clone().sub(ref.position).dot(fwd) + 25;
@@ -330,7 +335,7 @@ export function makeOneTake(ctx) {
         const hgt = 2 * Dz * Math.tan(fov * deg / 2), mesh = new THREE.Mesh(new THREE.PlaneGeometry(hgt * W / H, hgt), m);
         const C = atDepth(W / 2, H / 2, Dz), A = atDepth(at[0], at[1], Dz);
         const pivot = new THREE.Group(); pivot.position.copy(A); mesh.position.copy(C.clone().sub(A)); mesh.quaternion.copy(ref.quaternion); pivot.add(mesh); Wd.scene.add(pivot);
-        Wd.wov.push({ L, sh, cv, cx: cv.getContext('2d'), tx, mesh, pivot, A, behind, Dz, subjFollow: !behind && near.some((it) => it.isSubj) });
+        Wd.wov.push({ L, sh, cv, cx: cv.getContext('2d'), tx, mesh, pivot, A, behind, Dz, sft, subjFollow: !behind && near.some((it) => it.isSubj) });
       });
     }
     // named points
@@ -349,6 +354,8 @@ export function makeOneTake(ctx) {
   function activeShot(Tm) { return shots.find((s) => s.start <= Tm && Tm < s.end) || shots[shots.length - 1]; }
   function marchOffset(Wd, it, Tm) {
     const dir = Wd.dir;
+    // drive: the subject itself travels (a gallop): vx m/s along the way he faces, from the start of the world
+    if (dir.drive && it.isSubj) return dir.drive.vx * it.F.x * Math.max(0, Tm - (dir.drive.from ?? dir.span[0]));
     if (dir.march) {
       const t0 = dir.span[0], tStop = dir.march.stopAt, tEff = it.sh.id === dir.march.from || it.isSubj ? Math.min(Tm, tStop) : tStop;
       return Wd.v * (tEff - t0);
@@ -359,12 +366,20 @@ export function makeOneTake(ctx) {
   function anchors(Wd, Tm) {
     const s = Wd.subj, A = {};
     if (s) { const off = marchOffset(Wd, s, Tm), fl = s.F.x; A.feet = s.P.clone().add(new THREE.Vector3(off, 0, 0));
-      A.head = A.feet.clone().add(new THREE.Vector3(fl * s.headU[0] * s.mpu, -s.headU[1] * s.mpu, 0)); A.F = s.F.clone(); }
+      A.head = A.feet.clone().add(new THREE.Vector3(fl * s.headU[0] * s.mpu, -s.headU[1] * s.mpu, 0)); A.F = s.F.clone();
+      A.hw = A.head.clone(); }                       // 'hw': the same point, but with the world axes (side = right, front = lens)
     const mem = Wd.items.filter((it) => it.kind === 'member' && Tm >= it.ta - 0.5 && Tm < it.tb + 0.5);
     if (mem.length) { const c = new THREE.Vector3(); for (const it of mem) c.add(it.P).add(new THREE.Vector3(marchOffset(Wd, it, Tm), 0, 0)); c.multiplyScalar(1 / mem.length); c.y = 1.4; A.column = c; A.groups = c.clone(); }
     else if (A.head) { A.column = A.head.clone(); A.groups = A.head.clone(); }
     if (Wd.dir.hold) {                              // groups: where they stand before splitting (stable look point)
       const g = Wd.items.filter((it) => it.kind === 'member'); if (g.length) { A.groups = g.reduce((a, it) => a.add(it.P), new THREE.Vector3()).multiplyScalar(1 / g.length); A.groups.y = 1.2; } }
+    // every other named character is an anchor too (head position): { from: 'teacher', side, front, up } - like the
+    // named points these use the world axes (front = towards the lens, side = to the right)
+    for (const it of Wd.items) if (it.kind === 'toon' && !it.isSubj && it.L.D && it.L.D.name && !A[it.L.D.name]) {
+      const f = new THREE.Vector3(it.P.x + marchOffset(Wd, it, Tm), 0, it.P.z);
+      A[it.L.D.name] = f.add(new THREE.Vector3(it.F.x * it.headU[0] * it.mpu, -it.headU[1] * it.mpu, 0)); }
+    A.ref = Wd.ref.position.clone();                // the reference camera = the framing of the 2D shot
+    A.axis = Wd.atDepth(W / 2, H / 2, 12);          // ... and the point it looks at (frame centre, 12 m in)
     Object.assign(A, Wd.points);
     return A;
   }
@@ -523,7 +538,7 @@ export function makeOneTake(ctx) {
     // world overlays
     for (const o of Wd.wov) {
       const on = o.sh === sh; o.pivot.visible = on; if (!on) continue;
-      o.cx.setTransform(1, 0, 0, 1, 0, 0); o.cx.clearRect(0, 0, W, H);
+      o.cx.setTransform(1, 0, 0, 1, 0, 0); o.cx.clearRect(0, 0, W, H); o.cx.setTransform(1, 0, 0, 1, o.sft[0], o.sft[1]);
       try { OV.drawOverlay(o.cx, { ...o.L, world: false }, { ...o.sh, cam: {} }, Tm - o.sh.start, Math.min((Tm - o.sh.start) / (o.sh.end - o.sh.start), 1), [0, 0]); } catch (e) { console.warn('wov ' + e); }
       o.tx.needsUpdate = true;
       if (o.subjFollow && Wd.subj) o.pivot.position.copy(o.A).add(new THREE.Vector3(marchOffset(Wd, Wd.subj, Tm), 0, 0));

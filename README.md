@@ -13,14 +13,16 @@ questions, and short story films.
 | --- | --- |
 | `SKILL.md` | The workflow the agent follows: script -> voice -> project -> word timing -> cast -> sets -> shots -> check -> render |
 | `references/script.md` | Script templates per format (dynasty, invention, biography, myth, "why" question) |
-| `references/tts.md` | Narration with Google Gemini TTS (voice Fenrir, American English, native pace) |
+| `references/tts.md` | 默认旁白：Gemini TTS + Fenrir，美式英语，第③版紧凑短视频叙事，原生语速 |
 | `references/api.md` | Pose fields, layer keys and helpers |
 | `scripts/toon.py`, `poses.py`, `costumes.py`, `crowds.py` | Vector character rig with tweened poses, era costumes, crowds |
 | `scripts/bust.py` | Talking marble bust on a plinth (F in History's teacher), drawn as a toon layer |
 | `scripts/scenery.py`, `scenery_kits.py`, `overlays.py` | Code-drawn parallax sets, real-coastline maps, explainer overlays |
 | `scripts/engine.py`, `stage.py`, `timing.py`, `render_all.py` | Shot engine, word-timed cuts, parallel segment rendering |
 | `scripts/threejs/` | three.js / headless-Chrome renderer: JS port of the painter, 2D stage, real-3D shots, one-take camera ([references/threejs.md](references/threejs.md)) |
-| `scripts/narrate.py` | Script -> chapters -> Gemini TTS -> `assets/audio/narration.wav` |
+| `scripts/lineless/`, `references/lineless.md` | Style 2, an optional second look: lineless colour-block figures with skin tones, palette-driven mood, calm move-and-hold camera; browser Canvas 2D rendered in headless Chrome. Style 1 above stays the default |
+| `references/narration-compact-v3.txt` | 用户选定的第③版通用表演提示，作为默认配置的唯一来源 |
+| `scripts/narrate.py` | Script -> chapters -> 第③版 Fenrir TTS -> `assets/audio/narration.wav` |
 | `scripts/words.py` | Word timestamps with mlx-whisper |
 | `scripts/new_project.py` | Creates a project from `assets/templates/` |
 

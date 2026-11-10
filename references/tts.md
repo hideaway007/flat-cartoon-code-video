@@ -1,56 +1,46 @@
-# Narration: Google Gemini TTS, Fenrir, native pace (~191 wpm)
+# 默认旁白：第③版「紧凑短视频叙事」
 
-The confirmed English voice line (chosen by ear, 2026-11-07): Gemini 3.8 Flash TTS,
-prebuilt voice **Fenrir**, natural General American male storyteller, grounded and resonant, energy from stress and
-pitch, never shouting. Puck (the first The Rope audio) and the Mandarin Iapetus audition are not this line.
+用户于 **2026-11-09** 试听三种风格及无提示原版后，明确选择第③版，今后的新旁白默认固定使用。
 
-**Pace: keep Google's own pace, no time-stretching** (decided 2026-11-07). With the style prompt below Fenrir reads
-about 191 wpm. History: 165 (atempo 0.86) was rejected as "stretched", 175 (atempo 0.92) was tried, then the untouched
-take won. The audition samples (165 / 175 / 191) are listed in `LOCAL.md`.
+- 模型：`gemini-3.8-flash-tts`。
+- 音色：`Fenrir`，自然美式英语，同一讲述者身份。
+- 表演：紧凑、有冲击力的叙事；动作词重音清楚，音调灵活，情绪快速切换，惊讶和讽刺有反差，角色对话通过态度区分；不喊叫。
+- 语速：保留模型原生输出，不做后期变速。103 词试听为 34.76 秒，约 **177.8 词/分钟**；178 只是估算依据，不要求模型锁速。
+- 配置标识：`compact-shortform-v3`，记录在新项目的 `manifest.json` 中。
+- 通用表演提示唯一来源：[narration-compact-v3.txt](narration-compact-v3.txt)。`narrate.py` 直接读取它，项目中保存一份实际使用的 `style.txt`。
 
-## Run
+提示保留第③版的叙事节奏与表演规则，把试听稿里特定的国王、农夫及台词改为可复用指令。参考的是表达方式，不复刻博主的个人声音。除非用户明确要求，不恢复旧的 165 词/分钟提示、无风格提示原版或其他音色。
+
+## 使用
 
 ```bash
-python3 $K/narrate.py <project> --prepare-only   # chapters from production/script.md, no Google call; check them
-python3 $K/narrate.py <project>                  # TTS 2 chapters at a time, native pace -> assets/audio/narration.wav
-python3 $K/narrate.py <project> --status         # measured wpm per chapter
+python3 $K/narrate.py <project> --prepare-only
+python3 $K/narrate.py <project>
+python3 $K/narrate.py <project> --status
 ```
 
-`<project>` stands for the real folder path: type the path, not the angle brackets (zsh reads `<` as a redirect).
-Then `words.py` as usual (step 2), and re-check names, dates and numbers in `words.txt` against the script.
+`<project>` 换成实际工程路径，不输入尖括号。先核对章节、纯英文正文及 `production/tts/style.txt`，再提交配音。
 
-- Input: `production/script.md` (`## N Title` headings, spoken text before ` | `, lines starting with `(` skipped),
-  or `--texts <dir>` with ordered `.txt` files. One chapter = one request; chapters over ~3,500 bytes are split at
-  sentence ends.
-- Output: `production/tts/` holds `NN_<title>.txt`, the untouched take `NN_<title>.raw.wav`, the edge-trimmed
-  `NN_<title>.wav`, `style.txt` and `manifest.json`. Chapters are joined with 0.6 s gaps (`--gap`) into
-  `assets/audio/narration.wav`. A narration.wav the script did not make (e.g. the `say` placeholder) is moved to
-  `production/tts/replaced_<time>_narration.wav`, not deleted.
-- Auth: `gcloud auth print-access-token` (run `gcloud auth login` once). Google Cloud project, first found wins:
-  `--gcp-project`, env `GEMINI_TTS_PROJECT`, `gcp_project` in `<skill>/local.json` (not in the repo), then
-  `gcloud config get-value project`. The project needs Vertex AI / Gemini TTS access. Endpoint `aiplatform.googleapis.com/v1/projects/<p>/locations/global/publishers/google/models/
-  gemini-3.8-flash-tts:generateContent`, text plus `speechMetadata.style`, `speechConfig.voiceConfig.voice`.
+- 输入：`production/script.md`（`## N Title` 章节标题，` | ` 前是旁白），或 `--texts <dir>` 指定按文件名排序的纯英文 `.txt` 文件。每章一请求，超过约 3,500 字节会在句末拆分。
+- 混有中文对照、审稿说明的稿件先导出纯英文。当前解析器会读章节内未排除的普通行，不可直接提交双语审稿文件。
+- 输出：`production/tts/` 中保存章节文本、原始 `NN_<title>.raw.wav`、仅裁首尾静音的章节 WAV、`style.txt` 和 `manifest.json`。章节间默认留 0.6 秒，合成为 `assets/audio/narration.wav`。
+- 若 `narration.wav` 不是此工具生成的，会先移入 `production/tts/replaced_<time>_narration.wav` 保存。
+- 认证：`gcloud auth print-access-token`。项目编号依次来自 `--gcp-project`、`GEMINI_TTS_PROJECT`、Skill 的本机 `local.json`、gcloud 默认项目；不在公开文件内记录个人项目编号。
+- API：Vertex `aiplatform.googleapis.com/v1/projects/<p>/locations/global/publishers/google/models/gemini-3.8-flash-tts:generateContent`；正文与 `speechMetadata.style` 分开，声音用 `speechConfig.voiceConfig.voice` 指定。
 
-## Pace
+## 已有项目与风格缓存
 
-- The style prompt always asks for "about 165 words per minute" (`ASK_WPM`). That is the prompt of the accepted take,
-  and Fenrir reads it at ~191. Asking for a higher number pushes the model toward 200+ and changes the delivery, so
-  leave it.
-- Default `--wpm native`: each chapter is only trimmed of leading/trailing silence, never stretched. Chapters can
-  differ by a few wpm; `--status` shows each chapter's measured pace. If one chapter is clearly faster or slower than
-  the rest, `--retry NN` for a new take rather than stretching it.
-- Optional `--wpm N` forces an exact pace with ffmpeg `atempo = raw_seconds * N / (words * 60)` on the saved raw takes
-  (no new request, no quota); `--wpm native` goes back. Factors outside 0.85-1.20 are flagged. Only use this when the
-  user asks for a fixed pace.
+已有 `production/tts/manifest.json` 会保留当时的表演提示。若与当前请求的风格不同，生成或准备会停止并说明原因，避免更新了 Skill 却继续生成旧风格，或混用新旧章节。
 
-## Rules
+- `--status` 仍可检查旧项目；`--join-only` 仍可合并已经生成的旧章节。
+- 需要把旧项目整体改为第③版时，先归档原有 `production/tts/`，保留旧音频与清单，再重新准备并生成整套章节。不要覆盖或静默重发旧请求。
+- 此次更新不自动重配已有成片，也不修改用户稿件。
 
-- Style prompt: `style.txt` / `STYLE` in narrate.py. It keeps the voice description and drops story-specific cues.
-  For one-off direction, pass `--style file` (`{wpm}` is filled in with 165). Read the user's words verbatim; never
-  rewrite the script inside TTS.
-- No automatic re-sends: a chapter left `submitted` or `error` stops the run until it is checked and `--retry`'d,
-  so a timeout never spends quota twice. On HTTP 429, wait about a minute and retry that chapter.
-- Script length: ~190 wpm means 9-12 min = 1,700-2,300 words.
-- Prebuilt voice + style prompt, not a cloned or exclusive voice. A custom voice (Voice Design) hit the project's
-  quota twice on 2026-11-07, so it is not used.
-- Report the result as WAVs that were made and measured. They have not been listened to word by word.
+## 节奏与例外
+
+- 默认 `--wpm native`：只裁首尾静音，不改变句内速度和停顿。以各章实测时长和 `--status` 的 wpm 为准，不承诺每篇都恰好 178 词/分钟。
+- 以约 178 词/分钟估算，1,700-2,300 词约 10-13 分钟，另计额外画面留白。严肃或死亡段落应尊重稿件要求，避免把紧凑风格演成不合适的戏谑。
+- 自定义 `--style file` 仅在用户明确要求时使用；兼容的 `{wpm}` 占位符填入估算值 178，默认提示本身不含数值词速要求。表演指令不改写旁白正文。
+- 仅用户明确要求固定词速时使用 `--wpm N`，它会对保存的原始音频做 `atempo`。`--wpm native` 可恢复原生速度；变速系数超出 0.85-1.20 会标记。
+- 已提交但未保存结果或出错的章节不会自动重发；先检查再显式 `--retry NN`，避免重复计费。
+- 预置音色加表演提示，每次输出可能有细微差异。报告实际生成、测量和检查的结果，不声称进行了人工逐字试听。

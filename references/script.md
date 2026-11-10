@@ -4,7 +4,7 @@ The script decides most of the result: the reference channel's top video (1.6 M 
 question, not on drawing. Write it before any visuals; the user approves it before production.
 
 ## Length and pace
-- 9-12 min at ~190 words per minute (Fenrir's native narration pace, see tts.md) -> 1,700-2,300 words. 7-12 chapters of 40-90 s.
+- 默认用用户选定的第③版「紧凑短视频叙事」（Fenrir，详见 tts.md）：以试听实测约 178 词/分钟估算，1,700-2,300 词约 10-13 分钟。7-12 章；严肃段落和额外画面留白另算，以实际配音为准。
 - Short sentences, concrete nouns, numbers people can picture ("taller than you", "200 km of tunnels").
 - One idea per sentence; every 2-3 sentences something new happens that can be shown.
 
@@ -48,7 +48,7 @@ History must be right: keep a `production/sources.md` (book/article per chapter)
 twice the size"), mark legends as legends. Re-check names and dates in words.txt after TTS.
 
 ## Voice and music
-The user's own script voiced with Gemini TTS Fenrir at its native pace (~191 wpm) (`scripts/narrate.py`, [tts.md](tts.md)) or their own
-recording; licensed music with attribution in the description. The spoken text is everything before ` | ` on a line;
+用户自己的稿件，默认由 Gemini TTS + Fenrir 用第③版「紧凑短视频叙事」配音，保留原生语速（试听约 178 词/分钟，
+`scripts/narrate.py`，详见 [tts.md](tts.md)）；也可使用用户自己的录音。licensed music with attribution in the description. The spoken text is everything before ` | ` on a line;
 put stage notes that must not be read in `( )` on their own line.
 Never reuse another channel's script wording, characters or narration.

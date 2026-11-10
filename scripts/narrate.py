@@ -8,12 +8,12 @@
     python3 narrate.py <project> --wpm 175        # optional: force an exact pace (atempo on the saved raw takes, no new request)
     python3 narrate.py <project> --wpm native     # back to the untouched Google pace
 
-Voice line confirmed by ear on 2026-11-07: Gemini 3.8 Flash TTS, prebuilt
-voice Fenrir, natural General American male storyteller. Decision: keep the pace exactly as Google reads it
-(~191 wpm with this prompt); no time-stretching by default. 165 sounded stretched, 175 was tried, then native won.
-The style prompt always asks for ASK_WPM (165): that prompt produced the accepted take that Fenrir read at ~191 wpm.
-Asking for a higher number pushes the model faster and changes the delivery, so leave it.
-Chapters are only edge-trimmed (leading/trailing silence) and measured; --status shows each chapter's wpm.
+默认旁白（用户于 2026-11-09 试听后选定第③版）：Gemini 3.8 Flash TTS + Fenrir，
+自然美式英语，紧凑短视频叙事：动作重音鲜明，情绪快速切换，灵活音调，干脆的转折和笑点。
+通用表演提示保存在 references/narration-compact-v3.txt，延续第③版，不包含试听稿的角色或台词。
+保留 Google 原生语速，默认不变速；103 词试听为 34.76 秒（约 178 词/分钟），只是估算依据。
+不再使用原来的 165 词/分钟提示。章节仅修剪首尾静音；--status 显示各章实测语速。
+已有项目的风格清单如与当前配置不同，先归档旧 production/tts，再重新准备，避免混用风格。
 
 Input: production/script.md in the skill's format ("## N Title" chapter headings, one beat per line, spoken text
 before " | ", visual hints after). Or --texts <dir> with ordered .txt files (one file = one chapter).
@@ -27,11 +27,9 @@ import threading, urllib.request, wave
 
 MODEL = "gemini-3.8-flash-tts"
 VOICE = "Fenrir"
-STYLE = ("Natural General American English, confident and energetic storytelling at about {wpm} words per minute. "
-         "Use the same grounded, resonant male delivery throughout. Make important words pop with crisp stress and "
-         "varied pitch, preserve clean phrase endings, leave a short beat before each reveal or question, and lift "
-         "the funny lines with dry humor. No shouting. Read the supplied text verbatim, without music or added sound.")
-ASK_WPM = 165              # pace written into the style prompt (not the output pace, see the docstring)
+STYLE_PROFILE = "compact-shortform-v3"
+STYLE = (pathlib.Path(__file__).resolve().parent.parent / "references" / "narration-compact-v3.txt").read_text().strip()
+ESTIMATE_WPM = 178         # 仅用于估算及自定义模板的 {wpm}；默认提示不指定词速。
 MAX_BYTES = 3500          # split longer chapters at sentence ends (one request stays well inside the TTS limit)
 SAFE_TEMPO = (0.85, 1.20)  # atempo outside this range starts to sound processed -> flagged, regenerate instead
 
@@ -131,8 +129,13 @@ def split_long(text):
 
 
 def prepare():
+    style = (pathlib.Path(a.style).read_text().strip() if a.style else STYLE).format(wpm=ESTIMATE_WPM)
     if MAN.exists():
-        return json.loads(MAN.read_text())
+        m = json.loads(MAN.read_text())
+        if m.get("style") != style and not (a.status or a.join_only):
+            sys.exit("已有配音清单的表演风格与当前配置不同。请先归档 production/tts/，保留旧音频，"
+                     "再重新 --prepare-only 并生成，避免混用风格；--status 和 --join-only 仍可查看或合并旧配音。")
+        return m
     if a.texts:
         src = pathlib.Path(a.texts).expanduser().resolve()
         chaps = [(f.stem, f.read_text().strip()) for f in sorted(src.glob("*.txt"))]
@@ -143,7 +146,6 @@ def prepare():
         chaps = chapters_from_script(src)
     if not chaps:
         sys.exit(f"no chapters found in {src}")
-    style = (pathlib.Path(a.style).read_text().strip() if a.style else STYLE).format(wpm=ASK_WPM)
     T.mkdir(parents=True, exist_ok=True)
     (T / "style.txt").write_text(style + "\n")
     sections, n = [], 0
@@ -158,7 +160,8 @@ def prepare():
             sections.append(dict(id=sid, name=name, title=title, text=piece, words=count_words(piece),
                                  status="pending"))
     m = dict(source=str(src), gcp_project=gcp_project(), model=MODEL, voice=a.voice, language="en-US",
-             target_wpm=a.wpm, style=style, gap=a.gap, created=time.strftime("%Y-%m-%d %H:%M"), sections=sections)
+             target_wpm=a.wpm, style=style, style_profile="custom" if a.style else STYLE_PROFILE,
+             gap=a.gap, created=time.strftime("%Y-%m-%d %H:%M"), sections=sections)
     save(m)
     return m
 
