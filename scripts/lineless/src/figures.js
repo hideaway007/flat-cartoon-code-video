@@ -140,6 +140,24 @@ const KIT = {
     skin: '#e6a982', skinSh: '#c58762', hair: '#4a3324', hairSh: '#332116',
     boot: '#2b221c', bootSh: '#1c1612',
   },
+  libbie: {
+    trim: 'suit', coat: '#322b3b', coatSh: '#211c28', shirt: '#f5efe6', tie: '#5c4b68',
+    pants: '#2b2433', pantsSh: '#1d1824', hat: 'none', band: '#5c4b68',
+    skin: '#f3c6a2', skinSh: '#d9a17c', hair: '#593a27', hairSh: '#3d2619',
+    boot: '#1f1a24', bootSh: '#131017',
+  },
+  reno: {
+    trim: 'buttons', coat: '#263f6b', coatSh: '#182b4d', shirt: '#f0eae0',
+    pants: '#5878a0', pantsSh: '#3f5a7d', hat: '#262530', hatSh: '#181720', band: '#c9a23f',
+    skin: '#e8ad84', skinSh: '#c98a64', hair: '#3b2b22', hairSh: '#261b15',
+    scarf: '#c9a23f', boot: '#221c21', bootSh: '#151115',
+  },
+  benteen: {
+    trim: 'buttons', coat: '#2b4470', coatSh: '#1c2f52', shirt: '#f0eae0',
+    pants: '#5878a0', pantsSh: '#3f5a7d', hat: '#4a3a2c', hatSh: '#33271d', band: '#c9a23f',
+    skin: '#f0b98f', skinSh: '#d4946c', hair: '#aeb3bd', hairSh: '#848a96',
+    scarf: '#3f5a7d', boot: '#221c21', bootSh: '#151115',
+  },
 };
 
 function ik(sx, sy, hx, hy, l1, l2, dir = 1) {

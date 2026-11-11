@@ -241,16 +241,49 @@ function upper(o, k, ph, hx, hy) {
   const cuffCol = k.trim === 'suit' || k.trim === 'apron' ? '#f5efe4' : cus ? '#ead9b0' : GOLD;
 
   const drawArm = (sx, sy, tx, ty, sleeveC, handKind, propKind, bendDir, castShadow) => {
-    const [ex, ey, fx, fy] = ik(sx, sy, tx, ty, 66, 64, bendDir);
+    let effSx = sx, effSy = sy, effTx = tx, effTy = ty, l1 = 66, l2 = 64, effBend = bendDir;
+    const isPaperProp = propKind === 'note' || propKind === 'dossier' || propKind === 'sealed_order' || propKind === 'probation';
+    // Heroic clearance solver: never clamp a raised sabre, spyglass, or held paper inside the 1.42x head/face!
+    if (!isFront && propKind === 'sabre') {
+      const upAmt = clamp((-125 - ty) / 95, 0, 1);
+      effSx = sx + lerp(10, 20, upAmt);
+      effSy = sy - lerp(2, 12, upAmt);
+      effTx = lerp(Math.max(tx, 140), Math.max(tx, 160), upAmt);
+      effTy = upAmt > 0.05 ? Math.max(ty, -288) : ty;
+      l1 = lerp(86, 130, upAmt);
+      l2 = lerp(84, 136, upAmt);
+      effBend = 1;
+    } else if (!isFront && propKind === 'spyglass') {
+      effSx = sx + 10;
+      effSy = sy - 6;
+      effTx = Math.max(tx, 108);
+      effTy = clamp(ty, -234, -214);
+      l1 = 86; l2 = 84; effBend = 1;
+    } else if (!isFront && isPaperProp && ty < -135 && ty > -245) {
+      // Keep held testimony/order sheets well forward of speaking mouth & moustache!
+      effSx = sx + 8;
+      effTx = Math.max(tx, 132);
+      effTy = Math.max(ty, -148);
+      l1 = 82; l2 = 80;
+    } else if (ty < -185) {
+      const reachBoost = clamp((-185 - ty) / 130, 0, 1);
+      effSy = sy - reachBoost * 18;
+      l1 = lerp(66, 96, reachBoost);
+      l2 = lerp(64, 94, reachBoost);
+    }
+    const [ex, ey, fx, fy] = ik(effSx, effSy, effTx, effTy, l1, l2, effBend);
     if (castShadow) {
-      g.save(); g.globalAlpha = 0.17;
-      limb(sx + 5, sy + 8, ex + 5, ey + 8, 22, 17, '#16101e');
+      g.save(); g.globalAlpha = 0.22;
+      limb(effSx + 5, effSy + 8, ex + 5, ey + 8, 22, 17, '#16101e');
       limb(ex + 5, ey + 8, fx + 5, fy + 8, 17, 14, '#16101e');
       g.restore();
     }
-    limb(sx, sy, ex, ey, 21, 16.5, C(sleeveC));
+    // Subtle dark-shade under-edge so light buckskin sleeves read crisply over blonde hair/coats
+    limb(effSx, effSy + 2, ex, ey + 2, 21.5, 17, C(k.coatSh));
+    limb(effSx, effSy, ex, ey, 20.5, 16, C(sleeveC));
     if (cus) fringe(ex, ey, fx, fy, 5, 13, c('coatSh'));
-    limb(ex, ey, fx, fy, 16.5, 13.5, C(sleeveC));
+    limb(ex, ey + 1.5, fx, fy + 1.5, 17, 14, C(k.coatSh));
+    limb(ex, ey, fx, fy, 16, 13, C(sleeveC));
     const ang = Math.atan2(fy - ey, fx - ex);
     limb(fx - Math.cos(ang) * 7, fy - Math.sin(ang) * 7, fx, fy, 15, 14.5, C(cuffCol));
     if (propKind) at(fx, fy, 1, () => drawProp(propKind, ph));
@@ -420,8 +453,16 @@ function upper(o, k, ph, hx, hy) {
   const mc = C('#5e1f22'), teeth = C('#fffaf0'), tongue = C('#d96862');
   const mx = isFront ? 0 : 38, m = o.mouth;
   if (m === 'open' || m === 'talk') {
-    const oh = m === 'talk' ? 5 + Math.abs(Math.sin(ph * 3.2)) * 8 : 11;
-    ell(mx, -10, 9.5, oh, mc);
+    const gate = (m === 'talk' && typeof speechOpen === 'function' && _WORDS.length > 0)
+      ? speechOpen(_T || _CUR_T)
+      : 1;
+    if (m === 'talk' && gate < 0.08) {
+      g.beginPath(); g.moveTo(mx - 12, -12); g.quadraticCurveTo(mx, -11, mx + 12, -14);
+      g.strokeStyle = mc; g.lineWidth = 3.6; g.lineCap = 'round'; g.stroke();
+    } else {
+      const oh = m === 'talk' ? 3.5 + gate * 9.5 : 11;
+      ell(mx, -10, 9.5, oh, mc);
+    }
   } else if (m === 'whistle') {
     ell(mx + 10, -11, 5.5, 6.5, mc);
     const wp = (Math.abs(ph) * 0.45) % 1;

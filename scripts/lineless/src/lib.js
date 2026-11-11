@@ -88,7 +88,9 @@ function layer(cam, depth, fn, blurPx = 0) {
   fn(); g.restore();
 }
 // camera path: keys [[t, x, y, z, dur?], ...] — smooth glide move, then hold until next key's start
+let _CUR_T = 0;
 function camAt(keys, t, move = 1.15) {
+  _CUR_T = t;
   let c = keys[0];
   for (let i = 1; i < keys.length; i++) {
     const k = keys[i], p = glide(prog(t, k[0], k[0] + (k[4] || move)));
@@ -97,7 +99,35 @@ function camAt(keys, t, move = 1.15) {
   return { x: c[1], y: c[2], z: c[3] };
 }
 
-function text(s, x, y, size, fill, font = 'Rockwell', align = 'center', weight = 700) {
-  g.font = `${weight} ${size}px "${font}", Georgia, serif`; g.textAlign = align; g.textBaseline = 'middle';
-  g.fillStyle = fill; g.fillText(s, x, y);
+// ---- Word-exact syllable lip-sync gate (populated via setWords from words.json) ----
+let _WORDS = [];
+function setWords(arr) { _WORDS = Array.isArray(arr) ? arr : []; }
+function speechOpen(t = _CUR_T) {
+  const n = _WORDS.length;
+  if (!n) return 1;
+  let lo = 0, hi = n - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const w = _WORDS[mid];
+    if (t < w[0] - 0.02) hi = mid - 1;
+    else if (t > w[1] + 0.03) lo = mid + 1;
+    else {
+      const u = clamp((t - w[0]) / Math.max(0.08, w[1] - w[0]));
+      const env = Math.sin(clamp(u * 6, 0, 1) * Math.PI * 0.5) * Math.sin(clamp((1 - u) * 5, 0, 1) * Math.PI * 0.5);
+      const pulse = 0.38 + 0.62 * Math.abs(Math.sin(u * Math.PI * (w[2] || 1)));
+      return clamp(env * pulse * 0.88, 0, 0.85);
+    }
+  }
+  return 0;
+}
+
+// Mobile-safe text helper: enforces readable minimum size (>= 24px on 1920x1080) and optional maxWidth fit
+function text(s, x, y, size, fill, font = 'Rockwell', align = 'center', weight = 700, maxWidth = 0) {
+  const safeSize = size > 0 && size < 24 ? 24 : size;
+  g.font = `${weight} ${safeSize}px "${font}", Georgia, serif`;
+  g.textAlign = align;
+  g.textBaseline = 'middle';
+  g.fillStyle = fill;
+  if (maxWidth > 0) g.fillText(s, x, y, maxWidth);
+  else g.fillText(s, x, y);
 }

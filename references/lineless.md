@@ -1,65 +1,43 @@
-# Style 2: lineless colour-block (upgraded 2026-11-11)
+# Style 2: lineless colour-block (Director's Cut upgrade 2026-11-11)
 
-A rich, illustrated lineless look for F in History and landscape/narrative explainers. Style 1 (marker outline, white
-egg heads, Python engine) is completely untouched and stays the default; style 2 is chosen per video.
+A rich, multiplane illustrated lineless look with studio sound design for F in History and landscape/narrative explainers.
+Style 1 (marker outline, white egg heads, Python engine) is completely untouched and stays the default; style 2 is chosen
+per video.
 
 | | Style 1 (default) | Style 2 (this file) |
 | --- | --- | --- |
-| Figures | white egg head, thick marker outline, rubber arms | no outline, classic rounded capsule head + soft dark-pupil eyes, tailored multi-view coats & sculpted cuff+thumb hands |
-| Space & Depth | flat 2D / three.js plates | multiplane illustrated sets, warm window light shafts, foreground furniture occluders, true rear OTS (`view: 'back'`) & hardware Canvas2D optical bokeh (`blurPx`) |
-| Mood | expressions and poses | time-of-day palettes, `TINT`, `DEAD` grey-out, pearlescent droplets |
-| Camera | push / pan / whip, 15-31 cuts per minute | calm `glide` move then hold, shot-size alternation (WS / Rear OTS / Frontal MCU / CU) every 2.5-4.5 s |
+| Figures | white egg head, thick marker outline, rubber arms | no outline, classic rounded capsule head + soft dark-pupil eyes, 1:1 scale marble bust `teacherAt`, heroic face-clearing prop IK & sculpted cuff+thumb hands |
+| Space & Depth | flat 2D / three.js plates | multiplane illustrated sets, wide multi-camera classroom (`CLASS_CAM`), unified parchment topographic maps (`drawParchmentMapFrame`), twin-lens spyglass POV, foreground furniture occluders & optical bokeh (`blurPx`) |
+| Acting & Lip-Sync | pose tweens | `words.json` syllable-exact lip-sync (`export_words_js.py` + `speechOpen(t)`), distance-synced horse gaits (zero moonwalking), multi-beat `act()` |
+| Sound Design | dry narration | `mix_soundtrack.py`: physical-modeled stereo BGM bed + 35ms lookahead sidechain ducking (0% dead air) + frame-locked foley/SFX normalized to `-14 LUFS` |
 | Renderer | Python (numpy + opencv) or three.js | browser Canvas 2D in headless Chrome, ~0.5 s per second of film |
 
 ## Setup and commands
 
 ```bash
-python3 $K/lineless/setup_lineless.py <project>      # copies/updates library in <project>/lineless/ (keeps index.html & scenes*.js)
+python3 $K/lineless/setup_lineless.py <project>                           # installs/updates library in <project>/lineless/
+python3 $K/lineless/export_words_js.py <project>/production/words.json <project>/lineless/src/words_data.js
 cd <project>/lineless
-node render.mjs stills cast_sheet.html 0.3            # character & costume sheet -> stills/
-node render.mjs stills index.html 0.8,2.6,4.3         # review frames of your scenes
-node render.mjs video index.html 0 49.8 30 out/ch1.mp4 ../assets/audio/narration.wav
+node render.mjs stills index.html 0.8,2.6,5.6                             # review stills
+python3 mix_soundtrack.py --vo ../assets/audio/narration.wav --cues sound_cues.json --out out/master_-14LUFS.wav
+node render.mjs video index.html 0 49.8 30 out/ch1.mp4 out/master_-14LUFS.wav
 ```
-
-Needs Node 18+, ffmpeg, Google Chrome (`CHROME=/path` if not in `/Applications`). `render.mjs` exits non-zero on any
-`PAGE ERROR:`.
 
 ## Architecture & Upgraded Modules
 
-`src/index.html` loads the library and your `scenes*.js`. `window.renderFrame(t)` is a pure function of narration time
-`t` (seconds), deterministic and seek-safe.
-
 | File | Holds |
 | --- | --- |
-| `lib.js` | `W,H,g`; `clamp lerp prog tw eio eout glide back rng`; `mix grey`; `curve blob poly ell rr limb form at`; **`layer(cam, depth, fn, blurPx = 0)`** (supports clean optical bokeh!); `camAt(keys, t)` |
-| `figures.js` | `C(colour)`, `TINT`, `DEAD`, `COAT`, 19 detailed historical `KIT`s (`custer`, `custer_dress`, `trooper`, `scout`, `lakota`, `cheyenne`, `warrior`, `bartender`, `patron`, `arch`, `clerk`, `senator`, `cadet`, `officer`, `grant`, `terry`, `crook`, `miner`), `ik`, `EX`, **`act(t, beats)`** |
-| `body.js` | Classic soft `eye()` (warm `#fffaf0` sclera + dark `INK` pupil + skin lid — never overly bright or outlined!), `droplet()`, `drawHandShape('open'\|'point'\|'fist'\|'beckon')`, 24 props in `drawProp()`, tailored `upper()` with sleeve contact-occlusion shadow, lapels, split coat-tails, `emptyPockets`, `hatLift`, and `view: 'side' \| 'front'` |
-| `person.js` | `standing(x, y, s, o, flip)` supporting **`view: 'side' \| 'front' \| 'back'`** (calls `standingBack()` for true rear-view OTS shoulders/nape/hats!) and stances `'stand' \| 'strut' \| 'lunge' \| 'kneel' \| 'crouch' \| 'recoil' \| 'leap'` |
-| `rider.js`, `horse.js` | `mounted(x, y, s, o, flip)`: articulated horse + rider + reins + hoof dust (`rear`, `tired`, `blaze`, `socks`) |
-| `scenery.js` | 10 outdoor palettes (`DUSK`, `NOON`, `CAMP`, `SCORCHED`, `WESTPOINT`, `OUTPOST`, `CIVIL_WAR`, `WASHITA`, `BLACK_HILLS`, `GULLY`), outdoor terrain (`sky cloud ridge ground tufts sage rock tree pine river lodges tipi marker gatling`), AND **multiplane interior sets** (`drawSaloonBack` + `drawSaloonBarFG`, `drawArchiveBack` + `drawArchiveTableFG`, `drawClassroomBack` + `drawClassroomDeskFG`, `drawWestPointBack`, `drawCongressBack` + `drawCongressDaisAndFloor` + `drawWitnessPodiumFG`) |
-| `marks.js`, `teacher.js` | `RED`, `CREAM`, `blink(t)`, `wobble`, `ring`, `plate(x, y, title, sub, p, size)`, `teacher(o)` marble bust |
+| `lib.js` | `W,H,g`; `clamp lerp prog tw eio eout glide back rng`; `layer(cam, depth, fn, blurPx = 0)`; `camAt(keys, t)`; **`setWords(arr)` + `speechOpen(t)`** syllable lip-sync gate; **`text()` enforcing `>= 24px` mobile-safe floor** |
+| `figures.js` | `C(colour)`, `TINT`, `DEAD`, `COAT`, 22 historical `KIT`s (`custer`, `custer_dress`, `trooper`, `scout`, `lakota`, `cheyenne`, `warrior`, `bartender`, `patron`, `arch`, `clerk`, `senator`, `cadet`, `officer`, `grant`, `terry`, `crook`, `miner`, `libbie`, `reno`, `benteen`), `ik`, `EX`, `act(t, beats)` |
+| `body.js` | Classic soft `eye()`, `droplet()`, `drawHandShape()`, 24 props in `drawProp()`, **Heroic Prop-Clearance IK Solver** (keeps raised sabres, spyglasses, and held papers clear of the `1.42x` head/mouth!), dark-rim sleeve contrast, `view: 'side' \| 'front'` |
+| `person.js` | `standing(x, y, s, o, flip)` supporting `view: 'side' \| 'front' \| 'back'` (`standingBack()`) and full-body stances |
+| `teacher.js` | **1:1 human-scale marble bust `teacher(o)` / `teacherAt(x, y, s, o, flip)`** + `drawTeacherLectern()`, matching `body.js` rounded capsule head & soft eyes, with automatic `speechOpen()` pause gating |
+| `scenery.js` | 13 palettes (`DUSK`, `NOON`, `CAMP`, `SCORCHED`, `WESTPOINT`, `OUTPOST`, `CIVIL_WAR`, `WASHITA`, `BLACK_HILLS`, `GULLY`, `NIGHT`, `DAWN`, `SOLEMN`), multiplane interiors (`Saloon`, `Archive`, **`CLASS_CAM` multi-camera `Classroom` + `drawLiveChalk`**, `WestPoint`, `Congress`, `WhiteHouse`, `FortLincoln`, `Parlor`), **`drawParchmentMapFrame` + `drawMapRiver` + `drawMapRidge`**, **`drawSpyglassPOV`**, `glint`, `windGrass` |
+| `mix_soundtrack.py` | Procedural stereo BGM (`dusk_hook`, `investigation`, `march_tension`, `solemn_ridge`, `verdict_finale`) + lookahead sidechain ducking + 12 foley/SFX generators + 2-pass EBU R128 `-14.0 LUFS` mastering |
 
-## Craft & Direction Rules (Mandatory for High Visual Quality)
+## Mandatory Director & YouTube Retention Rules
 
-1. **Preserve the Classic Head & Soft Eye**: Keep the rounded capsule head (`roundRect` + small button nose in side view)
-   and soft warm-cream eyes (`#fffaf0` + dark `INK` pupil, no heavy black lash lines or glowing neon irises). Use
-   `droplet()` for tears/sweat — never rectangular bars.
-2. **True Multiplane Depth & Optical Separation**:
-   - Place subjects *behind* foreground set pieces (`drawSaloonBarFG`, `drawArchiveTableFG`, `drawWitnessPodiumFG`,
-     sagebrush/rocks at `depth 1.3–1.6`) rather than pasting everyone in front of flat walls.
-   - Alternate shot sizes every 2.5–4.5 s: Wide establishing -> True Rear OTS (`standing(..., { view: 'back' })` at
-     `depth 1.35` with `blurPx = 3.2`) -> Frontal/Side MCU (`s = 1.25–1.55`, background `blurPx = 3.5–4.5`) -> Insert.
-   - Never draw fake triangular perspective roads (`poly` triangles) under side-view horses/walkers.
-3. **Rich Detail & Acting Business**:
-   - Every shot must dress its environment richly (trees, rocks, camp smoke, bottle shelves, sunlight shafts, furniture)
-     and give characters concrete props (`detector`, `cartridge`, `note`, `bugle`, `ledger`, `feather_staff`, `mug`,
-     `rag`, `spyglass`, `sabre`) and staggered multi-beat reactions via `act(t, beats)`.
-   - Red (`#d8352a`) is reserved exclusively for the teacher's grading pen + Custer's neckerchief.
-4. **Calm Camera**: One smooth `glide` move (`camAt`) that settles and holds so compositions and plates read cleanly.
-   No high-frequency sine jitter (`Math.sin(t * 18)`) on limbs.
-
-## Quality Gate Before Delivery
-
-Render key stills across every shot (`node render.mjs stills index.html ...`), tile them into a single contact sheet,
-and visually inspect every frame: verify classic head/eye look, zero text/plate overlaps on faces, feet grounded on
-trails/floors, rich environmental detail, and clean foreground occluders before rendering full video.
+1. **Physics & Skeletal Closure**: Never run `ph = t * 5` horse gaits on static ground — either scroll `bg` with `tr` or use calm breathing idle (`Math.sin(t * 2) * 0.08`, no `dust`). Always load `words_data.js` so mouths close cleanly on breath pauses.
+2. **Dynamic Camera & Zero Classroom Fatigue**: Never hold a flat wide classroom shot for 15–20 s. Cut between `CLASS_CAM.board` (live chalk punch-in), `CLASS_CAM.teacher` (tight deadpan reaction MCU), and `CLASS_CAM.wide`. Keep median shot length 2.5–4.5 s; split any beat > 7 s into WS -> OTS/POV -> MCU.
+3. **Unified Visual Bible & Mobile-Safe Typography**: Use `drawParchmentMapFrame` + `drawMapRiver` for all maps; keep exam sheets inside chalkboard bounds (`640..1768, 124..700`); keep all primary labels `>= 30px` and max 3–4 text elements on screen at once.
+4. **Full Sound Design**: Always pair visual slashes, chalk writing, stamps, gavels, sabre draws, and rides with `mix_soundtrack.py` so zero pauses drop to `-70 dBFS` digital silence.
