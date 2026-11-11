@@ -1,105 +1,65 @@
-# Style 2: lineless colour-block (added 2026-11-10)
+# Style 2: lineless colour-block (upgraded 2026-11-11)
 
-A second look for the same kind of video. Style 1 (marker outline, white egg heads, Python engine) is unchanged and
-stays the default; style 2 is chosen per video. Accepted bar: the 17.5 s Little Bighorn sample (path in `LOCAL.md`);
-the user's verdict on 2026-11-10 was "the effect is okay, keep polishing" - keep new work at least at that level.
+A rich, illustrated lineless look for F in History and landscape/narrative explainers. Style 1 (marker outline, white
+egg heads, Python engine) is completely untouched and stays the default; style 2 is chosen per video.
 
 | | Style 1 (default) | Style 2 (this file) |
 | --- | --- | --- |
-| Figures | white egg head, thick marker outline, rubber arms | no outline, two tones per shape, skin tones, costume colour |
-| Mood | expressions and poses | palette: one colour set per time of day, `TINT`, `DEAD` grey-out |
-| Camera | push / pan / whip, 15-31 cuts per minute | one calm move then hold per shot, 2-5 s shots |
+| Figures | white egg head, thick marker outline, rubber arms | no outline, classic rounded capsule head + soft dark-pupil eyes, tailored multi-view coats & sculpted cuff+thumb hands |
+| Space & Depth | flat 2D / three.js plates | multiplane illustrated sets, warm window light shafts, foreground furniture occluders, true rear OTS (`view: 'back'`) & hardware Canvas2D optical bokeh (`blurPx`) |
+| Mood | expressions and poses | time-of-day palettes, `TINT`, `DEAD` grey-out, pearlescent droplets |
+| Camera | push / pan / whip, 15-31 cuts per minute | calm `glide` move then hold, shot-size alternation (WS / Rear OTS / Frontal MCU / CU) every 2.5-4.5 s |
 | Renderer | Python (numpy + opencv) or three.js | browser Canvas 2D in headless Chrome, ~0.5 s per second of film |
-| Library | costumes, crowds, poses, set kits, maps, overlays | riders, people on foot, teacher bust, two outdoor sets, plates, red pen |
-
-## Which videos it fits
-
-Good fit:
-- Journeys through landscape: marches, expeditions, campaigns, migrations, voyages. Layered hills, rivers and skies
-  are what this look does best, and riders / walkers are ready.
-- Stories that turn serious: battles, disasters, last days. The mood changes through colour (dusk palette, grey-out)
-  instead of funny faces, so a tragic chapter does not look like a gag. F in History chapter 7 type material.
-- Films with several peoples on screen. Figures have skin tones and their own clothes, so nobody is a white egg;
-  respectful depiction is easier.
-- The "teacher grades history" idea: red is kept for the teacher's pen, so every red mark reads as a grade.
-- Slower, documentary-toned narration and one-take chapters; long videos (10 min renders in about 5 minutes).
-
-Poor fit (use style 1):
-- Dense roast comedy that lives on big faces and 2-3 expression changes per shot. Faces here are smaller and calmer.
-- Episodes that need many costumes, interiors, crowds, held props or maps right away (dynasty speed-runs with 20
-  characters, invention histories with mechanisms). Style 1 has those kits; here each one must be drawn first.
-- Talky two-person scenes with a lot of hand acting.
-- The Rope and any series already published in style 1. Do not mix the two styles inside one video.
 
 ## Setup and commands
 
 ```bash
-python3 $K/lineless/setup_lineless.py <project>      # copies the library to <project>/lineless/, npm install
+python3 $K/lineless/setup_lineless.py <project>      # copies/updates library in <project>/lineless/ (keeps index.html & scenes*.js)
 cd <project>/lineless
-node render.mjs stills cast_sheet.html 0.3            # every figure type once -> stills/
+node render.mjs stills cast_sheet.html 0.3            # character & costume sheet -> stills/
 node render.mjs stills index.html 0.8,2.6,4.3         # review frames of your scenes
-node render.mjs video index.html 0 17.5 30 out/ch1.mp4 ../assets/audio/narration.wav
-node render.mjs video examples/ep02_ch1_0-17/index.html 0 17.5 30 out/example.mp4   # the accepted sample
+node render.mjs video index.html 0 49.8 30 out/ch1.mp4 ../assets/audio/narration.wav
 ```
 
-Needs Node 18+, ffmpeg, Google Chrome (`CHROME=/path` if not in the usual place). The script, voice and word-timing
-steps of SKILL.md (0, 0b, 2) are shared; steps 3-7 are replaced by this file. `render.mjs` exits with an error when
-the page throws; a video written after `PAGE ERROR:` is not valid.
+Needs Node 18+, ffmpeg, Google Chrome (`CHROME=/path` if not in `/Applications`). `render.mjs` exits non-zero on any
+`PAGE ERROR:`.
 
-## How a film is built
+## Architecture & Upgraded Modules
 
-`src/index.html` loads the library and your `scenes*.js`. A page defines `window.renderFrame(t)`; every shot is a
-pure function of `t` (seconds of narration), no state, so any frame draws on its own. One scenes file per chapter,
-under ~100 lines each; shot header comment = time range + the narration line it covers.
+`src/index.html` loads the library and your `scenes*.js`. `window.renderFrame(t)` is a pure function of narration time
+`t` (seconds), deterministic and seek-safe.
 
 | File | Holds |
 | --- | --- |
-| `lib.js` | `W,H,g`; `clamp lerp prog tw(t,a,b,ease) eio eout back rng`; `mix grey`; shapes `curve blob poly ell rr limb`; `form(path, base, shadeFn)` = two-tone shape; `at(x,y,s,fn,rot,flip)`; `layer(cam, depth, fn)`; `camAt(keys, t)`; `text` |
-| `figures.js` | `C(colour)` (every colour goes through it), `TINT=[colour, amount]`, `DEAD=0..1`, `COAT` horse colours, `KIT` costumes, `ik` |
-| `body.js` | `SKINS`, `HAIRS`, `eye`, `fringe`, `upper()` = torso + head + arms shared by all figures |
-| `person.js` | `standing(x, y, s, o, flip)`: on foot; `o.walk` 0..1, `o.ph` step phase, `o.hand` / `o.hand2` targets |
-| `rider.js`, `horse.js` | `mounted(x, y, s, o, flip)`: horse + rider + reins; `o.coat blanket blaze socks dust` |
-| `scenery.js` | palettes `DUSK`, `NOON`; `sky cloud ridge ground tufts sage tree river lodges`; `pen(pts, p)` red stroke |
-| `marks.js` | `RED CREAM`, `blink(t)`, `wobble` / `ring` pen paths, `plate(x, y, title, sub, p, size)` |
-| `teacher.js` | `teacher({mouth, look, brow, lid, tilt})`: the marble bust |
+| `lib.js` | `W,H,g`; `clamp lerp prog tw eio eout glide back rng`; `mix grey`; `curve blob poly ell rr limb form at`; **`layer(cam, depth, fn, blurPx = 0)`** (supports clean optical bokeh!); `camAt(keys, t)` |
+| `figures.js` | `C(colour)`, `TINT`, `DEAD`, `COAT`, 19 detailed historical `KIT`s (`custer`, `custer_dress`, `trooper`, `scout`, `lakota`, `cheyenne`, `warrior`, `bartender`, `patron`, `arch`, `clerk`, `senator`, `cadet`, `officer`, `grant`, `terry`, `crook`, `miner`), `ik`, `EX`, **`act(t, beats)`** |
+| `body.js` | Classic soft `eye()` (warm `#fffaf0` sclera + dark `INK` pupil + skin lid — never overly bright or outlined!), `droplet()`, `drawHandShape('open'\|'point'\|'fist'\|'beckon')`, 24 props in `drawProp()`, tailored `upper()` with sleeve contact-occlusion shadow, lapels, split coat-tails, `emptyPockets`, `hatLift`, and `view: 'side' \| 'front'` |
+| `person.js` | `standing(x, y, s, o, flip)` supporting **`view: 'side' \| 'front' \| 'back'`** (calls `standingBack()` for true rear-view OTS shoulders/nape/hats!) and stances `'stand' \| 'strut' \| 'lunge' \| 'kneel' \| 'crouch' \| 'recoil' \| 'leap'` |
+| `rider.js`, `horse.js` | `mounted(x, y, s, o, flip)`: articulated horse + rider + reins + hoof dust (`rear`, `tired`, `blaze`, `socks`) |
+| `scenery.js` | 10 outdoor palettes (`DUSK`, `NOON`, `CAMP`, `SCORCHED`, `WESTPOINT`, `OUTPOST`, `CIVIL_WAR`, `WASHITA`, `BLACK_HILLS`, `GULLY`), outdoor terrain (`sky cloud ridge ground tufts sage rock tree pine river lodges tipi marker gatling`), AND **multiplane interior sets** (`drawSaloonBack` + `drawSaloonBarFG`, `drawArchiveBack` + `drawArchiveTableFG`, `drawClassroomBack` + `drawClassroomDeskFG`, `drawWestPointBack`, `drawCongressBack` + `drawCongressDaisAndFloor` + `drawWitnessPodiumFG`) |
+| `marks.js`, `teacher.js` | `RED`, `CREAM`, `blink(t)`, `wobble`, `ring`, `plate(x, y, title, sub, p, size)`, `teacher(o)` marble bust |
 
-Face fields for every figure: `eyes: 'open'|'shut'|'wide'`, `look` -1..1, `lid` 0..1, `brow` -1..1,
-`mouth: 'smile'|'frown'|'open'`, `stache`, `beard`, `curls`, `hat: 'slouch'|'kepi'|'none'`, `skin` 0-3, `hair` 0-3.
-New character = a kit: `KIT.name = { ...KIT.plain, coat, coatSh, pants, hat, hatSh, scarf }`; vary a crowd with
-`skin`, `hair`, `hat`, beard and horse coat by index (see `trooper()` in the example). New costume pieces, hats and
-props are code in `body.js`; new sets are functions in `scenery.js` plus a palette object.
+## Craft & Direction Rules (Mandatory for High Visual Quality)
 
-## Look rules
+1. **Preserve the Classic Head & Soft Eye**: Keep the rounded capsule head (`roundRect` + small button nose in side view)
+   and soft warm-cream eyes (`#fffaf0` + dark `INK` pupil, no heavy black lash lines or glowing neon irises). Use
+   `droplet()` for tears/sweat — never rectangular bars.
+2. **True Multiplane Depth & Optical Separation**:
+   - Place subjects *behind* foreground set pieces (`drawSaloonBarFG`, `drawArchiveTableFG`, `drawWitnessPodiumFG`,
+     sagebrush/rocks at `depth 1.3–1.6`) rather than pasting everyone in front of flat walls.
+   - Alternate shot sizes every 2.5–4.5 s: Wide establishing -> True Rear OTS (`standing(..., { view: 'back' })` at
+     `depth 1.35` with `blurPx = 3.2`) -> Frontal/Side MCU (`s = 1.25–1.55`, background `blurPx = 3.5–4.5`) -> Insert.
+   - Never draw fake triangular perspective roads (`poly` triangles) under side-view horses/walkers.
+3. **Rich Detail & Acting Business**:
+   - Every shot must dress its environment richly (trees, rocks, camp smoke, bottle shelves, sunlight shafts, furniture)
+     and give characters concrete props (`detector`, `cartridge`, `note`, `bugle`, `ledger`, `feather_staff`, `mug`,
+     `rag`, `spyglass`, `sabre`) and staggered multi-beat reactions via `act(t, beats)`.
+   - Red (`#d8352a`) is reserved exclusively for the teacher's grading pen + Custer's neckerchief.
+4. **Calm Camera**: One smooth `glide` move (`camAt`) that settles and holds so compositions and plates read cleanly.
+   No high-frequency sine jitter (`Math.sin(t * 18)`) on limbs.
 
-- No outlines. A shape is a base colour plus one shade, clipped inside it with `form()`. No gradients except the sky.
-- One palette per time of day; all layers take their colours from it. Light is a palette choice or `TINT`, never a
-  post filter: no bloom, glow, rays, rim light, long cast shadows, vignette, grain or paper texture. Only a small
-  contact shadow under feet and hooves.
-- Red belongs to the teacher's pen (strike-through, ring, question mark, underline, the F) plus at most one costume
-  accent on the lead. Nothing else is red.
-- The figure is the centre of every shot. Numbers, plates and maps are accents beside it. Text is 40 px or larger and
-  stays inside the frame; plates sit in screen space, not on the camera.
-- Figures are never blurred. Depth comes from parallax, size and paler colours with distance.
-- Feet stand on the trail: `gy(x) + 26..90` where `gy = ground(...)`. Sort figures by y so nearer ones are drawn
-  last; a figure passing the lead goes behind the lead.
-- A solemn beat: stop the walk phase, raise `DEAD` to 1 over ~0.4 s, let the pen make its mark, no face gags.
+## Quality Gate Before Delivery
 
-## Camera rules
-
-- `camAt([[t0, x, y, z], [t1, x, y, z, dur]], t)`: one eased move, then hold. One stop per narration line.
-- Start a shot close on the lead, pull back to show the group; or hold wide and push to one face. No whip, no shake,
-  no motion blur. Cuts land on sentence starts.
-- `layer(cam, depth, fn)`: depth 0 sky, 0.1-0.45 clouds and far hills, 1 subject plane, 1.7 foreground brush.
-  A marching shot scrolls the background layers with an extra x offset while the figures hold their screen place.
-
-## Review before showing the user
-
-Render 9-12 stills across the cut points, tile them into one sheet and look at it: plates inside the frame and not
-on faces, feet on the trail, nobody crossing in front of the lead, red only where the pen is, text sizes. Then render
-the video. Report what was checked (stills) and what was not (full playback, sound).
-
-## Not built yet
-
-Costume presets per era, crowd helper, interiors, held props, maps and routes, counters, a `--check` pass for gaps
-and floating feet, parallel chapter renders. Add them to this folder when a film needs them, then re-run
-`setup_lineless.py` in the project to update its copy.
+Render key stills across every shot (`node render.mjs stills index.html ...`), tile them into a single contact sheet,
+and visually inspect every frame: verify classic head/eye look, zero text/plate overlaps on faces, feet grounded on
+trails/floors, rich environmental detail, and clean foreground occluders before rendering full video.

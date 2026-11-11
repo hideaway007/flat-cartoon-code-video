@@ -1,4 +1,4 @@
-// lib.js — canvas, easing, palette, shape helpers, parallax camera
+// lib.js — canvas, easing, palette, two-tone shape helpers, parallax + optical-DOF camera
 const W = 1920, H = 1080;
 const cv = document.getElementById('c');
 const g = cv.getContext('2d');
@@ -8,7 +8,8 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const prog = (t, a, b) => clamp((t - a) / (b - a));
 const eio = x => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 const eout = x => 1 - Math.pow(1 - x, 3);
-const back = x => 1 + 2.7 * Math.pow(x - 1, 3) + 1.7 * Math.pow(x - 1, 2);
+const glide = x => { const u = clamp(x); return u * u * u * (u * (6 * u - 15) + 10); };
+const back = x => 1 + 2.5 * Math.pow(x - 1, 3) + 1.5 * Math.pow(x - 1, 2);
 const tw = (t, a, b, e = eio) => e(prog(t, a, b));
 
 function rng(seed) {
@@ -24,7 +25,7 @@ function rng(seed) {
 const hex = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
 function mix(a, b, t) {
   const A = hex(a), B = hex(b);
-  return '#' + A.map((v, i) => Math.round(lerp(v, B[i], t)).toString(16).padStart(2, '0')).join('');
+  return '#' + A.map((v, i) => Math.round(clamp(lerp(v, B[i], t), 0, 255)).toString(16).padStart(2, '0')).join('');
 }
 // desaturate toward a paper grey (used for the "dead" beat)
 function grey(c, k) {
@@ -34,7 +35,6 @@ function grey(c, k) {
 }
 
 // ---- shapes -------------------------------------------------------------
-// smooth closed/open curve through points (Catmull-Rom -> bezier)
 function curve(pts, closed = true, k = 0.5) {
   const n = pts.length, P = i => pts[closed ? (i + n) % n : clamp(i, 0, n - 1)];
   g.moveTo(pts[0][0], pts[0][1]);
@@ -53,17 +53,17 @@ function poly(pts, fill) {
   g.closePath(); g.fillStyle = fill; g.fill();
 }
 function ell(x, y, rx, ry, fill, rot = 0) {
-  g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, 7); g.fillStyle = fill; g.fill();
+  g.beginPath(); g.ellipse(x, y, Math.max(0, rx), Math.max(0, ry), rot, 0, Math.PI * 2); g.fillStyle = fill; g.fill();
 }
 function rr(x, y, w, h, r, fill) { g.beginPath(); g.roundRect(x, y, w, h, r); g.fillStyle = fill; g.fill(); }
-// tapered capsule from A to B (limbs, necks, tails)
+function line(x1, y1, x2, y2, w = 4, fill = '#2a2230') { limb(x1, y1, x2, y2, w * 0.5, w * 0.5, fill); }
 function limb(x1, y1, x2, y2, w1, w2, fill) {
   const a = Math.atan2(y2 - y1, x2 - x1), s = Math.sin(a), c = Math.cos(a);
   g.beginPath();
   g.moveTo(x1 + s * w1, y1 - c * w1); g.lineTo(x2 + s * w2, y2 - c * w2);
-  g.arc(x2, y2, w2, a - Math.PI / 2, a + Math.PI / 2);
+  g.arc(x2, y2, Math.max(0.1, w2), a - Math.PI / 2, a + Math.PI / 2);
   g.lineTo(x1 - s * w1, y1 + c * w1);
-  g.arc(x1, y1, w1, a + Math.PI / 2, a + Math.PI * 1.5);
+  g.arc(x1, y1, Math.max(0.1, w1), a + Math.PI / 2, a + Math.PI * 1.5);
   g.closePath(); g.fillStyle = fill; g.fill();
 }
 // two-tone form: fill the path, then paint shade() clipped inside it
@@ -76,26 +76,28 @@ function at(x, y, s, fn, rot = 0, flip = false) {
   g.save(); g.translate(x, y); g.rotate(rot); g.scale(flip ? -s : s, s); fn(); g.restore();
 }
 
-// ---- parallax camera -----------------------------------------------------
-// cam = {x, y, z}. depth 0 = sky (fixed), 1 = subject plane, >1 = foreground.
-function layer(cam, depth, fn) {
+// ---- parallax + optical DOF camera --------------------------------------
+// cam = {x, y, z}. depth 0 = sky (fixed), 1 = sharp subject plane, >1 = foreground.
+// Optional blurPx applies hardware Canvas2D optical bokeh to background/foreground planes!
+function layer(cam, depth, fn, blurPx = 0) {
   const z = 1 + (cam.z - 1) * depth;
   g.save();
+  if (blurPx > 0.2) g.filter = `blur(${blurPx.toFixed(1)}px)`;
   g.translate(W / 2, H / 2); g.scale(z, z);
   g.translate(-W / 2 - cam.x * depth, -H / 2 - cam.y * depth);
   fn(); g.restore();
 }
-// camera path: keys [[t, x, y, z], ...] — eased move, then hold until next key's start
-function camAt(keys, t, move = 1.1) {
+// camera path: keys [[t, x, y, z, dur?], ...] — smooth glide move, then hold until next key's start
+function camAt(keys, t, move = 1.15) {
   let c = keys[0];
   for (let i = 1; i < keys.length; i++) {
-    const k = keys[i], p = eio(prog(t, k[0], k[0] + (k[4] || move)));
+    const k = keys[i], p = glide(prog(t, k[0], k[0] + (k[4] || move)));
     c = [0, lerp(c[1], k[1], p), lerp(c[2], k[2], p), lerp(c[3], k[3], p)];
   }
   return { x: c[1], y: c[2], z: c[3] };
 }
 
 function text(s, x, y, size, fill, font = 'Rockwell', align = 'center', weight = 700) {
-  g.font = `${weight} ${size}px "${font}"`; g.textAlign = align; g.textBaseline = 'middle';
+  g.font = `${weight} ${size}px "${font}", Georgia, serif`; g.textAlign = align; g.textBaseline = 'middle';
   g.fillStyle = fill; g.fillText(s, x, y);
 }

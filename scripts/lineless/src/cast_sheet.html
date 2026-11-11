@@ -1,21 +1,37 @@
 <!doctype html><meta charset="utf-8">
 <style>html,body{margin:0;background:#111}canvas{display:block}</style>
 <canvas id="c" width="1920" height="1080"></canvas>
-<script src="lib.js"></script><script src="figures.js"></script><script src="body.js"></script><script src="horse.js"></script><script src="rider.js"></script><script src="person.js"></script>
-<script src="teacher.js"></script>
+<script src="lib.js"></script><script src="figures.js"></script><script src="body.js"></script><script src="horse.js"></script><script src="rider.js"></script><script src="person.js"></script><script src="teacher.js"></script><script src="marks.js"></script>
 <script>
-// cast sheet: every figure type once. t shifts the walk phase:  node render.mjs stills cast_sheet.html 0.3
-KIT.clerk = { ...KIT.plain, coat: '#6f7f5a', coatSh: '#55633f', pants: '#3f3a44' };
 window.renderFrame = t => {
   DEAD = 0; TINT = null;
-  g.fillStyle = '#f1e2c4'; g.fillRect(0, 0, W, H);
-  g.fillStyle = '#d9b77c'; g.fillRect(0, 900, W, 180);
-  mounted(300, 900, 1.1, { kit: 'custer', coat: 'chestnut', curls: 1, stache: 1, ph: t * 5, blanket: '#2c456e', blaze: 1, socks: 1,
-    hand: [130, -430], brow: 0.5, lid: 0.3, mouth: 'smile', dust: '#e8d3a6' });
-  mounted(760, 900, 0.85, { kit: 'trooper', coat: 'bay', ph: t * 5 + 1, blanket: '#2c456e', beard: 1, hat: 'kepi', skin: 2, hair: 2, eyes: 'wide', mouth: 'open', socks: 1 });
-  standing(1060, 900, 1.05, { kit: 'trooper', ph: t * 5, walk: 1, stache: 1, skin: 1, hair: 1, mouth: 'frown', brow: -0.5 });
-  standing(1290, 900, 1.05, { kit: 'plain', hat: 'none', ph: t * 5, hair: 2, mouth: 'smile', hand: [96, -330], look: 1 });
-  standing(1560, 900, 1.05, { kit: 'clerk', hat: 'slouch', ph: t * 5 + 2, walk: 0.6, beard: 1, skin: 3, hair: 3, eyes: 'wide', mouth: 'open' }, true);
-  at(1790, 1000, 0.6, () => teacher({ mouth: 0.4, brow: 0.4 }));
+  g.fillStyle = '#f2e4c6'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#d9b87c'; g.fillRect(0, 490, W, 90);
+  g.fillStyle = '#d9b87c'; g.fillRect(0, 960, W, 120);
+  text('STYLE 2 · EXAGGERATED EXPRESSIONS, PROPS & MULTI-BEAT ACTIONS', 960, 46, 42, INK, 'Rockwell');
+  const row1 = [
+    ['SMUG + SABRE', 210, 'custer', 'slouch', { ...EX.smug, curls: 1, stache: 1, prop: 'sabre', hand: [125, -365] }],
+    ['CHARGE / SHOUT', 510, 'custer', 'slouch', { ...EX.charge, curls: 1, stache: 1, prop: 'sabre', hand: [145, -415], jump: 24 }],
+    ['PANIC / JAW DROP', 810, 'trooper', 'kepi', { ...EX.panic, stache: 1, hand: [52, -355], hand2: [-15, -345], jump: 28 }],
+    ['SHOCK + SPYGLASS', 1110, 'custer', 'slouch', { ...EX.shock, curls: 1, stache: 1, prop: 'spyglass', hand: [105, -360] }],
+    ['FURIOUS + STEAM', 1410, 'officer', 'kepi', { ...EX.furious, beard: 1, hair: 3, hand: [115, -310] }],
+    ['LAUGH + BEER MUG', 1710, 'patron', 'slouch', { ...EX.laugh, beard: 1, prop: 'mug', hand: [125, -365], jump: 18 }],
+  ];
+  row1.forEach(([lab, x, kit, hat, ex]) => {
+    standing(x, 485, 0.66, { kit, hat, ph: t * 5, ...ex });
+    text(lab, x, 528, 22, INK, 'Rockwell');
+  });
+  const row2 = [
+    ['GRIT + SWEAT', 210, 'trooper', 'slouch', { ...EX.grit, stache: 1, hand: [70, -340] }],
+    ['CARTRIDGE FIND', 510, 'arch', 'slouch', { ...EX.shock, mouth: 'grin', prop: 'cartridge', hand: [118, -305], jump: 20 }],
+    ['BUGLER + NOTE', 810, 'trooper', 'kepi', { ...EX.panic, stache: 1, prop: 'note', prop2: 'bugle', hand: [125, -320], hand2: [-35, -210] }],
+    ['CADET SLOUCH', 1110, 'cadet', 'shako', { ...EX.cocky, curls: 1, lean: -0.1, hand: [78, -235] }],
+    ['DREAD / GLOOM', 1410, 'cadet', 'kepi', { ...EX.dread, curls: 1, stache: 1, hand: [48, -350], hand2: [-18, -345] }],
+    ['SOLEMN ELDER', 1710, 'lakota', 'headband', { ...EX.solemn, feather: 2, braids: 1, skin: 2, hair: 3, prop2: 'feather_staff', hand: [110, -265], hand2: [-35, -240] }],
+  ];
+  row2.forEach(([lab, x, kit, hat, ex]) => {
+    standing(x, 975, 0.66, { kit, hat, ph: t * 5 + 1, ...ex });
+    text(lab, x, 1020, 22, INK, 'Rockwell');
+  });
 };
 </script>

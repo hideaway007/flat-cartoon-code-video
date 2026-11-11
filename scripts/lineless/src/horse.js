@@ -13,17 +13,20 @@ function horseLeg(hx, hy, ph, col, hoof, front, sock) {
 // hoof dust: three flat puffs that grow and fade behind the horse
 function dust(ph, col) {
   for (let k = 0; k < 3; k++) {
-    const p = (ph / 6.283 + k / 3) % 1;
+    const p = (Math.abs(ph) / 6.283 + k / 3) % 1;
     g.globalAlpha = (1 - p) * 0.55; ell(-150 - p * 150, -12 - p * 34, 16 + p * 30, 12 + p * 22, col); g.globalAlpha = 1;
   }
 }
-// o: {coat, ph, nod, blanket, blaze, socks, dust}
+// o: {coat, ph, nod, blanket, blaze, socks, dust, rear, tired}
 function horse(o) {
-  const p = COAT[o.coat || 'chestnut'], ph = o.ph || 0, nod = (o.nod || 0) + Math.sin(ph * 2) * 5;
+  const p = COAT[o.coat || 'chestnut'] || COAT.chestnut, ph = o.ph || 0, trd = o.tired || 0, rrAmt = o.rear || 0;
+  const nod = (o.nod || 0) + trd * 34 + Math.sin(ph * 2) * 5;
   const b = C(p.b), s = C(p.s), m = C(p.m), h = C(p.h), sk = o.socks ? C(SOCK) : null;
   g.globalAlpha = 0.2; ell(10, 6, 200, 15, C('#1d1226')); g.globalAlpha = 1;      // contact shadow, not a cast one
   if (o.dust) dust(ph, C(o.dust));
-  g.save(); g.translate(0, Math.sin(ph * 2 + 1) * 4);
+  g.save();
+  if (rrAmt) { g.translate(-95, 0); g.rotate(-0.34 * rrAmt); g.translate(95, 0); }
+  g.translate(trd ? Math.sin(ph * 18) * 2.5 * trd : 0, Math.sin(ph * 2 + 1) * 4);
   const sway = Math.sin(ph) * 12;
   limb(-140, -262, -190 - sway, -150, 19, 9, m); limb(-150, -250, -208 - sway * 1.4, -118, 12, 3, m); // tail
   horseLeg(-98, -212, ph + Math.PI, s, h, false, null); horseLeg(104, -212, ph + Math.PI * 1.5, s, h, true, null);
