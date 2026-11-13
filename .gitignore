@@ -6,3 +6,9 @@ __pycache__/
 *.pyc
 .DS_Store
 node_modules/
+# renders made in place while working on the film styles
+scripts/film/out/
+scripts/film/stills/
+scripts/film/films/
+scripts/film/package.json
+scripts/film/package-lock.json

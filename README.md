@@ -21,6 +21,7 @@ questions, and short story films.
 | `scripts/engine.py`, `stage.py`, `timing.py`, `render_all.py` | Shot engine, word-timed cuts, parallel segment rendering |
 | `scripts/threejs/` | three.js / headless-Chrome renderer: JS port of the painter, 2D stage, real-3D shots, one-take camera ([references/threejs.md](references/threejs.md)) |
 | `scripts/lineless/`, `references/lineless.md` | Style 2, an optional second look: lineless colour-block figures with skin tones, palette-driven mood, calm move-and-hold camera; browser Canvas 2D rendered in headless Chrome. Style 1 above stays the default |
+| `scripts/film/`, `references/film-styles.md` | Styles 3 and 4, two film looks for subject channels: CUTAWAY (engineering, maritime and aviation disasters) and LOW SUN (expeditions, polar journeys, voyages). Shots with hard cuts on a beat, a read-out and quotes from the primary record, sound synthesised in code; browser Canvas 2D in headless Chrome, Node only. Two 15 s worked examples with their sound: `examples/elfaro_0706`, `examples/eleven_miles` |
 | `references/narration-compact-v3.txt` | 用户选定的第③版通用表演提示，作为默认配置的唯一来源 |
 | `scripts/narrate.py` | Script -> chapters -> 第③版 Fenrir TTS -> `assets/audio/narration.wav` |
 | `scripts/words.py` | Word timestamps with mlx-whisper |
@@ -37,6 +38,8 @@ Requirements: Python 3 with numpy and opencv-python, ffmpeg on PATH, `mlx-whispe
 For narration: the Google Cloud CLI (`gcloud auth login`) and a project with Gemini TTS access, given by
 `--gcp-project`, the `GEMINI_TTS_PROJECT` environment variable, a `local.json` (`{"gcp_project": "..."}`) next to
 `SKILL.md`, or `gcloud config get-value project`.
+Styles 3 and 4 (`scripts/film/`) need only Node 18+ and Google Chrome; their setup installs an ffmpeg binary into
+the project when there is none on PATH.
 
 Machine-specific notes (paths to your Python, sample renders) can go in a `LOCAL.md` next to `SKILL.md`; it is
 git-ignored and the skill reads it first.
@@ -45,4 +48,6 @@ git-ignored and the skill reads it first.
 
 - Code and docs: MIT, see `LICENSE`.
 - Fonts in `assets/fonts/` (Bangers, Lilita One): SIL Open Font License 1.1, license texts alongside.
+- Fonts in `scripts/film/src/fonts/` (Barlow Condensed, B612 Mono, IM Fell English, Caveat; latin subsets as
+  packaged by Fontsource): SIL Open Font License 1.1, license texts alongside.
 - Map data in `assets/geo/`: Natural Earth (public domain).

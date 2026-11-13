@@ -1,6 +1,6 @@
 ---
 name: flat-cartoon-code-video
-description: Make narrated 2D cartoon history/science explainer videos (dynasty and kingdom speed-runs, invention and discovery histories, biographies, myths, "why did X" questions) and story films where every character, costume, prop, crowd, background, map and on-screen annotation is DRAWN IN CODE (no image generation) in a flat marker-outline, white-egg-head style - script templates, vector rigs with tweened poses, code-drawn parallax sets, explainer overlays (circles, labels, maps, routes, counters), word-timed shots, segment renders joined with the narration. Two looks to choose from: style 1 (default) the marker-outline white-egg-head look; style 2 a lineless colour-block look with skin tones, palette-driven mood and a calm move-and-hold camera, drawn on a browser canvas. Default for The Rope and any new video in this style unless the user asks for AI-generated images (then use flat-cartoon-story-video).
+description: Make narrated 2D cartoon history/science explainer videos (dynasty and kingdom speed-runs, invention and discovery histories, biographies, myths, "why did X" questions) and story films where every character, costume, prop, crowd, background, map and on-screen annotation is DRAWN IN CODE (no image generation) in a flat marker-outline, white-egg-head style - script templates, vector rigs with tweened poses, code-drawn parallax sets, explainer overlays (circles, labels, maps, routes, counters), word-timed shots, segment renders joined with the narration. Four looks: style 1 (default) marker-outline white egg heads; style 2 lineless colour-block with skin tones; style 3 CUTAWAY (engineering, sea and air disasters) and style 4 LOW SUN (expeditions, polar journeys), film looks cut on a beat with read-outs and quotes from the record and code-made sound. Default for The Rope and any new video in this style unless the user asks for AI-generated images (then use flat-cartoon-story-video).
 ---
 
 # Flat cartoon video, drawn in code
@@ -16,7 +16,7 @@ re-renders in seconds. Keep the look at least at V12 level.
 `K=<this skill>/scripts`, `PY` = Python with numpy + opencv (the local venv path is in `LOCAL.md`), ffmpeg on PATH.
 API details (pose fields, layer keys, helpers): [references/api.md](references/api.md).
 
-## Two styles: pick one per video (style 2 added 2026-11-10)
+## Four styles: pick one per video (style 2 added 2026-11-10, styles 3 and 4 added 2026-11-13)
 
 | | Style 1: marker outline (default) | Style 2: lineless colour-block |
 | --- | --- | --- |
@@ -24,13 +24,27 @@ API details (pose fields, layer keys, helpers): [references/api.md](references/a
 | Best for | gag-dense explainers, many costumes / interiors / maps, The Rope | journeys through landscape, stories that turn serious, several peoples on screen, the red-pen "grading" idea |
 | Built with | everything below in this file | [references/lineless.md](references/lineless.md) + `scripts/lineless/` |
 
+| | Style 3: CUTAWAY | Style 4: LOW SUN |
+| --- | --- | --- |
+| Look | night blue, amber instrument light, alarm red; blocky figures; the ship or building cut open like a technical drawing; a recorder read-out with a countdown | a low sun and its halo over a huge cold landscape; bundled figures lit from behind, long shadows; the journal on every shot: date, tally, handwriting, sketch map |
+| Best for | engineering, maritime and aviation disasters told minute by minute from a transcript or a log | expeditions, polar journeys, voyages and mutinies told day by day from a diary or a log book |
+| Built with | [references/film-styles.md](references/film-styles.md) + `scripts/film/` | the same |
+
 - Style 1 is the default and everything below describes it. Use style 2 only when the user asks for it ("第二种风格",
-  "无描边", "色块", "lineless", "style 2") or has already chosen it for that series. For a new series that names
-  neither, show the comparison above and ask once.
-- One style per video; never mix them inside a film. Style 2 does not replace or change any style 1 file.
-- Shared by both: script (step 0), voice (0b), word timing (2), the user's direction rules (figures at the centre of
-  every shot, text readable, calm camera, no cinematic filters). For style 2, steps 1 and 3-7 are replaced by
+  "无描边", "色块", "lineless", "style 2") or has already chosen it for that series. Use style 3 or 4 only when the
+  user asks for it ("第三种风格", "剖面", "CUTAWAY", "style 3"; "第四种风格", "远征", "LOW SUN", "style 4") or the
+  series (channel) is already in it. For a new series that names none, show the comparison above and ask once.
+- One style per video; never mix them inside a film. Styles 2, 3 and 4 do not replace or change any style 1 file,
+  or each other's.
+- Shared by all four: script (step 0), voice (0b), word timing (2), readable text. The user's direction rules for
+  styles 1 and 2 are unchanged (figures at the centre of every shot, text readable, calm camera, no cinematic
+  filters). For style 2, steps 1 and 3-7 are replaced by
   [references/lineless.md](references/lineless.md): `python3 $K/lineless/setup_lineless.py <project>`.
+- Styles 3 and 4 are films: hard cuts on a beat, a different composition for every shot, rim light, depth of field
+  and grain belong to these two looks, so the calm-camera and no-filter rules do not apply to them. Steps 1 and 3-7
+  are replaced by [references/film-styles.md](references/film-styles.md): `node $K/film/setup_film.mjs <project>`
+  (Node 18+ and Chrome; no Python). Bar: `scripts/film/examples/elfaro_0706` (the user accepted it on 2026-11-13 and
+  asked for it to be added here); `eleven_miles` was built to the same standard; the user has not given a verdict on it yet.
 
 ## Workflow
 

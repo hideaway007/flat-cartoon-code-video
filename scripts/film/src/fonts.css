@@ -1,0 +1,8 @@
+/* fonts of styles 3 and 4 (all SIL Open Font License 1.1; licence texts in fonts/) */
+@font-face{font-family:"barlow-condensed";font-weight:500;src:url(fonts/barlow-condensed-latin-500-normal.woff2)}
+@font-face{font-family:"barlow-condensed";font-weight:700;src:url(fonts/barlow-condensed-latin-700-normal.woff2)}
+@font-face{font-family:"b612-mono";font-weight:400;src:url(fonts/b612-mono-latin-400-normal.woff2)}
+@font-face{font-family:"b612-mono";font-weight:700;src:url(fonts/b612-mono-latin-700-normal.woff2)}
+@font-face{font-family:"im-fell-english";font-weight:400;src:url(fonts/im-fell-english-latin-400-normal.woff2)}
+@font-face{font-family:"im-fell-english";font-weight:400;font-style:italic;src:url(fonts/im-fell-english-latin-400-italic.woff2)}
+@font-face{font-family:"caveat";font-weight:600;src:url(fonts/caveat-latin-600-normal.woff2)}
